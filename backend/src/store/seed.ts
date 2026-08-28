@@ -177,9 +177,13 @@ export function seedDemoData(): void {
   })
 }
 
+// Excludes 'Lakshmi Narayan' and 'Anitha George' — both used explicitly
+// below (token 20's priority patient, token 3's emergency patient) and
+// would otherwise also turn up as a coincidental namesake among the
+// completed tokens this array cycles through.
 const DEMO_NAMES = [
-  'Aditi Varma', 'Rahul Devarakonda', 'Sandhya Reddy', 'Farhan Ahmed', 'Lakshmi Narayan',
+  'Aditi Varma', 'Rahul Devarakonda', 'Sandhya Reddy', 'Farhan Ahmed', 'Rakesh Bommidi',
   'Divya Chowdary', 'Kiran Bathula', 'Manoj Pillai', 'Ganesh Patil', 'Neha Kapoor',
-  'Vikram Shetty', 'Anitha George', 'Rohit Malhotra', 'Swathi Reddy', 'Imran Shaikh',
+  'Vikram Shetty', 'Meenakshi Iyengar', 'Rohit Malhotra', 'Swathi Reddy', 'Imran Shaikh',
   'Priyanka Nair',
 ]

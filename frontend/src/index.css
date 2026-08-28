@@ -1,0 +1,132 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------
+   VisitNow design system — "calm clinical."
+
+   Deliberately not the default Tailwind blue-on-white SaaS palette: a
+   warm off-white ground (not stark white), a deep muted teal as the one
+   accent color, and an editorial serif for anything that should feel
+   like a statement (a token number, a headline) paired with a warm
+   geometric sans for everything functional. The goal is a page that
+   reads as designed for a healthcare product, not generated for one.
+--------------------------------------------------------------------- */
+
+@theme {
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #eef5f3;
+  --color-brand-100: #d9e9e5;
+  --color-brand-200: #b3d3cb;
+  --color-brand-300: #82b6ab;
+  --color-brand-400: #4f9186;
+  --color-brand-500: #14746f;
+  --color-brand-600: #0f5d5a;
+  --color-brand-700: #0b4644;
+  --color-brand-800: #093836;
+  --color-brand-900: #072a29;
+}
+
+:root {
+  --color-bg: #faf8f4;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+
+  --color-text: #1c2321;
+  --color-text-muted: #55605b;
+  --color-text-faint: #838d87;
+
+  --color-border: #e6e1d6;
+  --color-border-strong: #d4cdbc;
+
+  --color-success: #2f7d5a;
+  --color-success-bg: #e6f2ec;
+  --color-warning: #a3690c;
+  --color-warning-bg: #faf0dc;
+  --color-danger: #b3392a;
+  --color-danger-bg: #fbeae6;
+
+  /* Queue-source tags — deliberately distinct from the status colors
+     above, since a token's source and its status are unrelated facts
+     that can both be shown on the same row. */
+  --color-source-online: #0f5d5a;
+  --color-source-online-bg: #e3efed;
+  --color-source-offline: #55605b;
+  --color-source-offline-bg: #ecebe6;
+  --color-source-appointment: #3d5a80;
+  --color-source-appointment-bg: #e5eaf1;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.75rem;
+
+  --shadow-sm: 0 1px 2px rgba(28, 35, 33, 0.06);
+  --shadow-md: 0 6px 20px -4px rgba(28, 35, 33, 0.12);
+  --shadow-lg: 0 20px 45px -12px rgba(28, 35, 33, 0.22);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-brand-200);
+  color: var(--color-brand-900);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise-in {
+  animation: rise-in 0.35s var(--ease-out);
+}
+
+@keyframes count-pulse {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-count-pulse {
+  animation: count-pulse 0.4s var(--ease-out);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-toast-in {
+  animation: toast-in 0.25s var(--ease-out);
+}
