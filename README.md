@@ -77,3 +77,4 @@ curl -X POST http://localhost:4000/api/demo/reset
 Phase 1 (data model + queue engine) and the first pass of Phase 2/3 (patient experience +
 hospital console) are built and working end to end. Appointments exist in the API but don't
 have a frontend yet. See the product brief for the full phase breakdown.
+# VisitNow
