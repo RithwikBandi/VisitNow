@@ -88,6 +88,55 @@ export interface Appointment {
   queueEntryId?: string
 }
 
+/** Mirrors backend/src/store/revenue.ts's RevenueReport exactly. */
+export interface RevenueTotals {
+  tokensIssued: number
+  clinicFeeCollected: number
+  clinicFeeDue: number
+  platformFeeCollected: number
+}
+export interface RevenueClinicRow extends RevenueTotals {
+  clinicId: string
+  clinicName: string
+  city: string
+}
+export interface RevenueDoctorRow extends RevenueTotals {
+  doctorId: string
+  doctorName: string
+  clinicNames: string[]
+}
+export interface RevenueDayRow extends RevenueTotals {
+  date: string
+}
+export interface RevenueSourceRow {
+  source: QueueSource
+  count: number
+  clinicFeeCollected: number
+}
+export interface RevenueEntryRow {
+  id: string
+  tokenNumber: number
+  patientName: string
+  clinicName: string
+  doctorName: string
+  date: string
+  source: QueueSource
+  status: QueueStatus
+  clinicFeeAmount: number
+  clinicFeeCollected: boolean
+  platformFeeCollected: number
+  createdAt: string
+}
+export interface RevenueReport {
+  generatedAt: string
+  totals: RevenueTotals
+  byClinic: RevenueClinicRow[]
+  byDoctor: RevenueDoctorRow[]
+  byDay: RevenueDayRow[]
+  bySource: RevenueSourceRow[]
+  entries: RevenueEntryRow[]
+}
+
 export class ApiError extends Error {
   status: number
   constructor(message: string, status: number) {

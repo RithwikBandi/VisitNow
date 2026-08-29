@@ -4,6 +4,7 @@ import { appointmentsRouter } from './routes/appointments.js'
 import { catalogRouter } from './routes/catalog.js'
 import { queueEntriesRouter } from './routes/queueEntries.js'
 import { sessionsRouter } from './routes/sessions.js'
+import { staffRouter } from './routes/staff.js'
 import { resetStore } from './store/store.js'
 import { seedDemoData } from './store/seed.js'
 
@@ -19,6 +20,7 @@ app.use('/api', catalogRouter)
 app.use('/api', sessionsRouter)
 app.use('/api', queueEntriesRouter)
 app.use('/api', appointmentsRouter)
+app.use('/api', staffRouter)
 
 /** Demo-only convenience: rebuild the seed data from scratch on demand,
  * so a messed-up demo state (mid-presentation, mid-testing) is one call

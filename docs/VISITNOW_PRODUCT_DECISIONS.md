@@ -491,7 +491,79 @@ finally shows real content — every token booked ahead, with its date printed o
 of a tab that could never have anything in it. No new data model, no new screens; the date was
 already on every `Session` fetched, it just wasn't being read.
 
-## 18. Open questions (unresolved, flagged for a future decision)
+## 18. Marketing landing page, Warangal's DateStrip bug, and the first real hospital-side build
+
+The biggest single round of feedback so far: fix Warangal's date selector, expand Warangal's demo
+data further, move the clinic map to the bottom of the page, build a real public marketing landing
+page, and — explicitly, in the same breath, "don't stop until the complete application is built,
+including hospital side" — start building out the hospital side for real, not just leave it as the
+single-session console from earlier phases.
+
+**Warangal's date selector "wasn't working" for the same reason as §12's original bug, not a new
+one.** DateStrip only renders once a doctor+clinic+slot has more than one dated `Session` record to
+switch between (see its own doc comment) — Dr. Suman and Dr. Anjali's Warangal sessions only ever
+had a single date each, so there was nothing to select, not a broken selector. Fixed by seeding
+`dateOffset(1)`/`dateOffset(2)` sibling sessions for both, the same pattern §12 already used for Dr.
+Kumar's Sunrise sessions. Verified live: the strip now renders Today/Tomorrow/Mon and switching
+between them shows the right session.
+
+**Warangal demo data expanded again** — a third clinic (Ramnagar Multispecialty Clinic) and three
+more doctors (Dr. Srinivas Bommakanti, Dr. Divya Sagi, Dr. Manohar Ravella), including a second
+"live right now" Warangal session so the city has more than one doctor's queue to look at, matching
+Hyderabad's density. Same fictional-identity-on-real-geography convention as §14.
+
+**Clinic map moved to the bottom of the page** — after "Doctors at this clinic," not before it. A
+patient's actual question sequence on a clinic page is "who practices here, is there a queue" before
+"where exactly is this on a map"; the map is confirmation once they already care, not the first
+thing to see.
+
+**A real public marketing landing page** (`pages/marketing/LandingPage.tsx`) now sits at `/` for
+anyone with no local patient identity yet — a returning patient still skips straight to `/home`
+(unchanged from §11's "no gate for returning users" rule). Hero, a real stats bar, "how it works,"
+a features grid, a cities section, a "for clinics" section bridging to staff login, a final CTA, and
+a footer — built entirely from this project's own design tokens (Sora/Manrope, brand blue + accent
+green), not a generic template. Two rules enforced while building it:
+
+- **No fabricated social proof.** No testimonial quotes attributed to invented "happy patients" —
+  that would be exactly the false-endorsement problem this project's own §21 naming rule already
+  forbids for doctors and clinics, just aimed at patients instead. A features/how-it-works framing
+  carries the same persuasive weight honestly.
+- **Every number on the page is real**, counted from the actual seed data at the time it was
+  written (3 cities, 9 clinics, 16 doctors) — not a round marketing number.
+
+Two real bugs found and fixed during its own build (verified live, not assumed): a Tailwind
+class-order collision made a `Button`'s override classes (`bg-white text-[...]`) lose to its
+variant's own `bg-[...] text-white`, rendering an invisible-text button — fixed with `!important`
+modifiers rather than hoping for string-order luck. And a full-page screenshot tool artifact (not a
+real site bug) briefly looked like two broken city photos — confirmed both images actually load
+fine by checking a normal in-viewport screenshot instead.
+
+**The hospital side's first real second feature: a revenue & analytics dashboard**
+(`/staff/revenue`), closing the "too soon" requirement from §15. Backend: `computeRevenueReport()`
+(`store/revenue.ts`) aggregates every `QueueEntry` by clinic, by doctor, by day, and by source
+(online/walk-in/appointment) — totals, collected vs. due clinic fees, and VisitNow's own platform
+fee, all computed fresh from live data on every request, never a separate table that could drift
+from the source of truth. Frontend: summary cards, breakdown tables, a full token-level table, a
+**real CSV download** (a client-side `Blob` built from the same rows already on the page, not a
+disabled link) and a **real print report** (the browser's own print, with a dedicated print
+stylesheet that hides the interactive chrome/nav and expands the token table's scroll clipping so
+the full list actually prints) — verified live: the CSV downloaded with correct rows, and print-media
+emulation confirmed the report renders cleanly without the console chrome.
+
+Building this exposed a real, pre-existing gap in the data model: `generateToken` and the
+appointment-conversion route only ever snapshotted `hospitalFeeAmount` for **online** entries —
+a walk-in or converted-appointment patient still pays the clinic's consultation fee at the counter
+in real life, but nothing recorded it, which made "how much did we collect today" silently wrong
+for two of the three token sources. Fixed by snapshotting the fee (and a `PAID` status, since a
+receptionist wouldn't hand over a token before being paid) for every source, not just online; the
+revenue aggregator also falls back to the entry's session fee for any older seeded entry that
+predates this fix, so historical demo data stays countable without needing to be re-seeded.
+
+**Staff console navigation** grew a real nav bar (Sessions / Revenue) in `StaffLayout` instead of
+one implicit page — the console stopped being a single screen the moment a second real section
+existed alongside it.
+
+## 19. Open questions (unresolved, flagged for a future decision)
 
 - **Real patient auth.** Login/Register currently collect a name+phone and function identically
   to Guest — no password is verified against anything (see §8.10 sibling reasoning: there's
@@ -509,3 +581,9 @@ already on every `Session` fetched, it just wasn't being read.
   whether capacity should be a hard cap or a soft "queue is long" warning before building it.
 - **Refunds.** See edge case #31 — no data model support yet; needs a real payment gateway
   relationship to mean anything anyway.
+- **How much of "the hospital side" §18 actually built.** One real feature (revenue &amp;
+  analytics) end-to-end, not a full hospital admin platform — there is still no UI to create/edit a
+  clinic or doctor (seed.ts is the only way new ones exist), no per-hospital login separation (one
+  shared staff passcode covers every clinic, same as before this round), and no notification layer.
+  Worth being explicit about rather than letting "the hospital side got built this round" imply more
+  than it does.

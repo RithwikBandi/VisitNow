@@ -589,12 +589,180 @@ export function seedDemoData(): void {
     doctorStatus: 'available',
     isQueueOpen: false,
   })
-  addSession({
+  const anjaliMorning = addSession({
     doctorId: drAnjali.id,
     clinicId: kakatiyaClinic.id,
     label: 'Morning Session',
     startTime: '10:00',
     endTime: '13:00',
+    avgConsultMinutes: 10,
+    hospitalFeeAmount: 350,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+
+  // Same doctor, same clinic, same slot — tomorrow and the day after,
+  // exactly like Dr. Kumar's Sunrise sessions above. Without these, a
+  // Warangal doctor's DateStrip never renders at all (it only shows up
+  // once there's more than one date's Session record to switch
+  // between) — this was reported back as "date selection isn't
+  // working," but the date selector itself was fine; there was simply
+  // nothing to select between yet.
+  addSession({
+    doctorId: drSuman.id,
+    clinicId: kakatiyaClinic.id,
+    label: 'Morning Session',
+    date: dateOffset(1),
+    startTime: '09:00',
+    endTime: '13:00',
+    avgConsultMinutes: 8,
+    hospitalFeeAmount: 300,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drSuman.id,
+    clinicId: kakatiyaClinic.id,
+    label: 'Morning Session',
+    date: dateOffset(2),
+    startTime: '09:00',
+    endTime: '13:00',
+    avgConsultMinutes: 8,
+    hospitalFeeAmount: 300,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drAnjali.id,
+    clinicId: kakatiyaClinic.id,
+    label: 'Morning Session',
+    date: dateOffset(1),
+    startTime: '10:00',
+    endTime: '13:00',
+    avgConsultMinutes: 10,
+    hospitalFeeAmount: 350,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drAnjali.id,
+    clinicId: kakatiyaClinic.id,
+    label: 'Morning Session',
+    date: dateOffset(2),
+    startTime: '10:00',
+    endTime: '13:00',
+    avgConsultMinutes: 10,
+    hospitalFeeAmount: 350,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+
+  // --- More Warangal — a third clinic and three more doctors, so the
+  // city reads as a real local market rather than one doctor's
+  // showcase. Same fictional-identity-on-real-geography convention.
+  const ramnagarClinic = addClinic({
+    name: 'Ramnagar Multispecialty Clinic',
+    location: 'Ramnagar, Hanamkonda',
+    city: 'Warangal',
+    photoUrl: clinicPhoto('ramnagar-multispecialty-clinic'),
+  })
+
+  const drSrinivas = addDoctor({
+    name: 'Dr. Srinivas Bommakanti',
+    specialty: 'Orthopedic Surgeon',
+    qualifications: 'MBBS, MS (Ortho)',
+    photoUrl: doctorPhoto('dr-srinivas-bommakanti'),
+  })
+  const drDivya = addDoctor({
+    name: 'Dr. Divya Sagi',
+    specialty: 'Gynecologist',
+    qualifications: 'MBBS, MS (OBG)',
+    photoUrl: doctorPhoto('dr-divya-sagi'),
+  })
+  const drManohar = addDoctor({
+    name: 'Dr. Manohar Ravella',
+    specialty: 'ENT Specialist',
+    qualifications: 'MBBS, MS (ENT)',
+    photoUrl: doctorPhoto('dr-manohar-ravella'),
+  })
+
+  // A second "live" Warangal session, at a different clinic — so
+  // Warangal has more than one thing happening right now, the same way
+  // Hyderabad does.
+  const srinivasLive = addSession({
+    doctorId: drSrinivas.id,
+    clinicId: ramnagarClinic.id,
+    label: 'Morning Session',
+    startTime: relTime(-1.5),
+    endTime: relTime(2.5),
+    avgConsultMinutes: 12,
+    hospitalFeeAmount: 450,
+    doctorStatus: 'available',
+    isQueueOpen: true,
+    nextTokenNumber: 6,
+    currentToken: 4,
+  })
+  for (let t = 1; t <= 3; t++) {
+    addEntry({
+      sessionId: srinivasLive.id,
+      tokenNumber: t,
+      source: t === 2 ? 'offline' : 'online',
+      priority: 'regular',
+      status: 'completed',
+      patientName: DEMO_NAMES[(t + 10) % DEMO_NAMES.length],
+      completedAt: new Date(Date.now() - (4 - t) * 12 * 60_000).toISOString(),
+    })
+  }
+  addEntry({
+    sessionId: srinivasLive.id,
+    tokenNumber: 4,
+    source: 'online',
+    priority: 'regular',
+    status: 'in_progress',
+    patientName: 'Priyanka Nair',
+    calledAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+    startedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+    ...onlinePayment('ONLINE', 450, '3312'),
+  })
+  addEntry({
+    sessionId: srinivasLive.id,
+    tokenNumber: 5,
+    source: 'offline',
+    priority: 'priority',
+    status: 'waiting',
+    patientName: 'Ganesh Patil',
+    priorityAssignedBy: 'Front Desk — Ramnagar',
+  })
+  addSession({
+    doctorId: drSrinivas.id,
+    clinicId: ramnagarClinic.id,
+    label: 'Morning Session',
+    date: dateOffset(1),
+    startTime: '09:30',
+    endTime: '13:30',
+    avgConsultMinutes: 12,
+    hospitalFeeAmount: 450,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+
+  addSession({
+    doctorId: drDivya.id,
+    clinicId: ramnagarClinic.id,
+    label: 'Evening Session',
+    startTime: '17:30',
+    endTime: '20:30',
+    avgConsultMinutes: 15,
+    hospitalFeeAmount: 500,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drManohar.id,
+    clinicId: subedariClinic.id,
+    label: 'Morning Session',
+    startTime: '09:00',
+    endTime: '12:00',
     avgConsultMinutes: 10,
     hospitalFeeAmount: 350,
     doctorStatus: 'available',

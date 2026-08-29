@@ -117,19 +117,28 @@ export function generateToken(
     createdAt: new Date().toISOString(),
   }
 
-  // Payment + verification code only apply to online tokens — see the
-  // QueueEntry field docs in types/index.ts and decisions log §3/§6. A
-  // walk-in never goes through VisitNow's payment step at all.
+  // Payment method + verification code are online-only concepts — a
+  // walk-in never goes through VisitNow's own payment step, and is
+  // already standing in front of the person who'd otherwise ask for a
+  // code. But the clinic's own consultation fee is real money changing
+  // hands at the counter either way — see decisions log §18 (revenue
+  // dashboard): a walk-in's fee just wasn't being recorded anywhere
+  // before, which made "how much did we collect today" impossible to
+  // answer honestly for anything but online tokens. It's snapshotted
+  // here exactly like the online case (see Session.hospitalFeeAmount's
+  // own doc comment on why a snapshot, not a live lookup), assumed
+  // collected at issue time — a walk-in receptionist wouldn't hand over
+  // a token before being paid.
+  entry.hospitalFeeAmount = session.hospitalFeeAmount
+  entry.hospitalFeeStatus = isOnline ? (input.paymentMethod === 'ONLINE' ? 'PAID' : 'DUE') : 'PAID'
   if (isOnline) {
     entry.paymentMethod = input.paymentMethod
-    entry.hospitalFeeAmount = session.hospitalFeeAmount
     entry.platformFeeAmount = PLATFORM_FEE_INR
     // Token creation *is* the payment confirmation in this prototype —
     // there's no separate gateway step that could leave this pending.
     // See decisions log §8.7 for exactly why, and what a real
     // integration would need to do differently.
     entry.platformFeeStatus = 'PAID'
-    entry.hospitalFeeStatus = input.paymentMethod === 'ONLINE' ? 'PAID' : 'DUE'
     entry.verificationCode = generateVerificationCode(sessionId)
   }
 

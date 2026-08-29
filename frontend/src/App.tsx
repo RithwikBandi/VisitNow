@@ -10,6 +10,7 @@ import { ClinicDetailPage } from './pages/patient/ClinicDetailPage'
 import { ClinicsListPage } from './pages/patient/ClinicsListPage'
 import { DoctorPage } from './pages/patient/DoctorPage'
 import { HomePage } from './pages/patient/HomePage'
+import { LandingPage } from './pages/marketing/LandingPage'
 import { ContactPage, DeleteProfilePage, EditProfilePage, PrivacyPage, TermsPage } from './pages/patient/ProfileSubPages'
 import { ProfilePage } from './pages/patient/ProfilePage'
 import { SessionDetailPage } from './pages/patient/SessionDetailPage'
@@ -19,12 +20,15 @@ import { VisitsPage } from './pages/patient/VisitsPage'
 import { StaffHomePage } from './pages/staff/StaffHomePage'
 import { StaffLoginPage } from './pages/staff/StaffLoginPage'
 import { StaffQueueConsolePage } from './pages/staff/StaffQueueConsolePage'
+import { StaffRevenuePage } from './pages/staff/StaffRevenuePage'
 
-/** No splash, no animated logo gate — a website loads straight to
- * where you're going. This is a plain, instant redirect based on
- * whether a local identity already exists, not a screen. */
+/** No splash, no animated logo gate for a returning patient — a
+ * website loads straight to where you're going. A first-time visitor
+ * (no local identity yet) sees the public marketing page instead of
+ * being dropped straight into an auth form with no context for what
+ * they're signing up for. */
 function RootRedirect() {
-  return <Navigate to={getPatientIdentity() ? '/home' : '/auth'} replace />
+  return getPatientIdentity() ? <Navigate to="/home" replace /> : <LandingPage />
 }
 
 export default function App() {
@@ -57,6 +61,7 @@ export default function App() {
       <Route element={<RequireStaffAuth />}>
         <Route element={<StaffLayout />}>
           <Route path="/staff" element={<StaffHomePage />} />
+          <Route path="/staff/revenue" element={<StaffRevenuePage />} />
           <Route path="/staff/sessions/:sessionId" element={<StaffQueueConsolePage />} />
         </Route>
       </Route>

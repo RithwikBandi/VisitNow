@@ -55,6 +55,11 @@ appointmentsRouter.post('/appointments/:id/convert', (req, res) => {
     patientName: appointment.patientName,
     patientPhone: appointment.patientPhone,
     createdAt: new Date().toISOString(),
+    // Same reasoning as the offline case in queueEngine.generateToken —
+    // an appointment-converted visit still owes the clinic its
+    // consultation fee, collected at the counter, not through VisitNow.
+    hospitalFeeAmount: session.hospitalFeeAmount,
+    hospitalFeeStatus: 'PAID' as const,
   }
   session.nextTokenNumber += 1
   queueEntries.set(entry.id, entry)

@@ -58,6 +58,23 @@ export function ClinicDetailPage() {
       )}
 
       <div>
+        <h2 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">
+          Doctors at this clinic ({sessions.length})
+        </h2>
+        {sessions.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-faint)]">No sessions scheduled here today.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {sessions.map((s) => (
+              <DoctorCard key={s.id} session={s} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Location comes last — a patient wants "which doctors, is there
+          a queue" before "where exactly is this on a map." */}
+      <div>
         <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Location</h2>
         <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)]">
           <iframe
@@ -72,21 +89,6 @@ export function ClinicDetailPage() {
           <MapPin size={12} aria-hidden="true" />
           {clinic.location}, {clinic.city}
         </p>
-      </div>
-
-      <div>
-        <h2 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">
-          Doctors at this clinic ({sessions.length})
-        </h2>
-        {sessions.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-faint)]">No sessions scheduled here today.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {sessions.map((s) => (
-              <DoctorCard key={s.id} session={s} />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   )

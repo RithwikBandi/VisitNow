@@ -1,4 +1,4 @@
-import { ApiError, type Appointment, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type QueuePriority, type QueueSource, type Session, type SessionWithRelations } from './types'
+import { ApiError, type Appointment, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type QueuePriority, type QueueSource, type RevenueReport, type Session, type SessionWithRelations } from './types'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') ?? ''
 
@@ -125,4 +125,10 @@ export function bookAppointment(input: {
 
 export function convertAppointment(appointmentId: string): Promise<{ appointment: Appointment; entry: QueueEntry }> {
   return request(`/api/appointments/${appointmentId}/convert`, { method: 'POST' })
+}
+
+// --- Staff: revenue & analytics ------------------------------------------
+
+export function fetchRevenueReport(): Promise<RevenueReport> {
+  return request('/api/staff/revenue')
 }
