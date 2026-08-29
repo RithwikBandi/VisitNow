@@ -14,7 +14,7 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="animate-rise-in flex flex-col gap-6">
+    <div className="animate-rise-in mx-auto flex max-w-2xl flex-col gap-6">
       <div className="flex items-center gap-3">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-brand-100)] text-[var(--color-brand-700)]">
           <User size={24} aria-hidden="true" />

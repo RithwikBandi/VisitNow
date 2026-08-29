@@ -270,7 +270,50 @@ right after payment with one obvious next action ("Track Live Queue"), not a des
 returns to. The dividing line that generalizes: a screen belongs in the shell if a patient would
 plausibly navigate *away from* it via a tab, not just *forward* out of it.
 
-## 11. Open questions (unresolved, flagged for a future decision)
+## 11. Correction pass — "you built a mobile app, not a website"
+
+The first patient-experience rebuild (§7-10) got real product feedback back that it had built a
+phone-app screen inside a browser window rather than a genuine responsive website — the reference
+mobile mockup was meant strictly as a *workflow* reference, not a layout to reproduce, and it had
+been reproduced anyway (a fixed narrow centered column at every viewport width, a bottom-only tab
+bar, a native-app-style animated splash screen). Worth recording exactly what changed and why,
+since "make it feel like a website" is a real, checkable requirement, not a vague aesthetic note.
+
+**What was actually wrong, concretely:**
+- Every screen was wrapped in a `max-w-sm`/`max-w-2xl` centered column *regardless of viewport
+  width* — on a 1600px desktop monitor the app still rendered as a narrow phone-width strip with
+  empty space on both sides. A website uses the space it has; only checkout-style narrow flows
+  (payment, confirmation) should stay intentionally narrow, and only because that's a legitimate
+  pattern on real sites too, not because everything was narrow.
+- The splash screen (a full-screen animated logo, native-app convention) was the forced landing
+  route. Websites load to content; they don't gate every visit behind a branded loading screen.
+  Removed outright — `/` now redirects instantly based on identity, no screen in between.
+- The clinic-first browsing path from the reference workflow (Hospitals Listing → Hospital
+  Details → its doctors) had been dropped in the first pass as a scope cut. That was the wrong
+  cut — it's real workflow depth the reference explicitly modeled, not a visual detail. Rebuilt as
+  `/clinics` and `/clinics/:id`, using backend endpoints (`GET /api/clinics`, `GET /api/clinics/:id`)
+  that had already been built in Phase 1 and simply never wired to any UI.
+- No date selection existed anywhere in the token flow. Added a real one (DateStrip on
+  SessionDetailPage), backed by actually-seeded Session records for the next two days for at
+  least one doctor — not a decorative control with every day but "today" disabled.
+
+**Fix, structurally:** one `AppShell` replaces the previous PatientShellLayout/PatientFlowLayout
+split. A real header (logo, location, nav links) that only collapses to a compact bar + bottom tab
+nav below the `md` breakpoint — that collapse is a legitimate, common responsive-web pattern (real
+production sites do this); the earlier mistake was rendering that collapsed mobile chrome
+*unconditionally*, not the existence of a bottom nav at mobile widths at all. Drill-down pages
+render their own inline "back" link in their own content flow (a normal site pattern, like a
+breadcrumb) instead of every route being wrapped in a persistent app-style back bar.
+
+**A second real bug surfaced by this fix, not by the feedback itself:** seeding multi-day sessions
+for the new date selector meant a doctor now legitimately has several `Session` records for what a
+patient thinks of as one slot ("Dr. Kumar's morning session at Sunrise") — the Clinic/Doctor
+browsing grids were rendering one card per *session*, so that doctor appeared three times on his
+own clinic's page. Fixed with `lib/sessions.ts`'s `dedupeByDoctorClinicSlot` — browsing views
+collapse to one card per doctor+clinic+label (preferring today's date), while SessionDetailPage's
+DateStrip still gets every date, since that's the one place all of them are actually relevant.
+
+## 12. Open questions (unresolved, flagged for a future decision)
 
 - **Real patient auth.** Login/Register currently collect a name+phone and function identically
   to Guest — no password is verified against anything (see §8.10 sibling reasoning: there's

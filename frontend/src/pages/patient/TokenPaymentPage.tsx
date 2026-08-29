@@ -1,6 +1,7 @@
 import { Check, CreditCard, Wallet } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/patient/BackLink'
 import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { fetchSession, generateToken } from '../../lib/api'
@@ -68,7 +69,8 @@ export function TokenPaymentPage() {
   }
 
   return (
-    <div className="animate-rise-in flex flex-col gap-6">
+    <div className="animate-rise-in mx-auto flex max-w-xl flex-col gap-6">
+      <BackLink />
       <div>
         <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
         <h1 className="font-display text-xl font-bold text-[var(--color-text)]">{doctor.name}</h1>

@@ -65,7 +65,7 @@ export function VisitsPage() {
   const filtered = (rows ?? []).filter((r) => tabFor(r.entry.status) === tab)
 
   return (
-    <div className="animate-rise-in flex flex-col gap-5">
+    <div className="animate-rise-in mx-auto flex max-w-2xl flex-col gap-5">
       <h1 className="font-display text-2xl font-bold text-[var(--color-text)]">My Visits</h1>
 
       <div className="scrollbar-none flex gap-2 overflow-x-auto">

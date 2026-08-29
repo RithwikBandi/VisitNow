@@ -33,6 +33,14 @@ export function fetchTodaysSessions(): Promise<{ sessions: SessionWithRelations[
   return request('/api/sessions/today')
 }
 
+export function fetchClinics(): Promise<{ clinics: Clinic[] }> {
+  return request('/api/clinics')
+}
+
+export function fetchClinic(clinicId: string): Promise<{ clinic: Clinic; sessions: SessionWithRelations[] }> {
+  return request(`/api/clinics/${clinicId}`)
+}
+
 export function fetchDoctor(doctorId: string): Promise<{ doctor: Doctor; sessions: SessionWithRelations[] }> {
   return request(`/api/doctors/${doctorId}`)
 }

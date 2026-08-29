@@ -16,6 +16,15 @@ import { clinics, doctors, nextId, queueEntries, sessions } from './store.js'
 
 const today = new Date().toISOString().slice(0, 10)
 
+/** `offset` in days from today — used to seed a couple of upcoming dates
+ * for a session so the date-selector on SessionDetailPage has more than
+ * one real day to switch between (see the frontend's DateStrip). */
+function dateOffset(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 /** Placeholder photography — verified live (both services return real
  * images, not broken links) rather than guessed. `u=<slug>` / `seed=
  * <slug>` deterministically map a string to one image, so the same
@@ -41,7 +50,9 @@ function addDoctor(d: Omit<Doctor, 'id'>): Doctor {
   return doctor
 }
 
-function addSession(s: Omit<Session, 'id' | 'date' | 'nextTokenNumber' | 'currentToken'> & { nextTokenNumber?: number; currentToken?: number | null }): Session {
+function addSession(
+  s: Omit<Session, 'id' | 'date' | 'nextTokenNumber' | 'currentToken'> & { date?: string; nextTokenNumber?: number; currentToken?: number | null },
+): Session {
   const session: Session = {
     id: nextId('session'),
     date: today,
@@ -211,6 +222,36 @@ export function seedDemoData(): void {
     status: 'waiting',
     patientName: 'Aditi Varma',
     ...onlinePayment('PAY_AT_HOSPITAL', 500, '6041'),
+  })
+
+  // Same doctor, same clinic, same slot — tomorrow and the day after.
+  // Not live (no queue yet, that only exists same-day), but real Session
+  // records with real ids, so SessionDetailPage's date selector has more
+  // than one actual day to switch between instead of a decorative strip
+  // with everything but "today" disabled.
+  addSession({
+    doctorId: drKumar.id,
+    clinicId: sunrise.id,
+    label: 'Morning Session',
+    date: dateOffset(1),
+    startTime: '08:00',
+    endTime: '12:00',
+    avgConsultMinutes: 6,
+    hospitalFeeAmount: 500,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drKumar.id,
+    clinicId: sunrise.id,
+    label: 'Morning Session',
+    date: dateOffset(2),
+    startTime: '08:00',
+    endTime: '12:00',
+    avgConsultMinutes: 6,
+    hospitalFeeAmount: 500,
+    doctorStatus: 'available',
+    isQueueOpen: false,
   })
 
   // Dr. Kumar's evening session — a different clinic, a different day

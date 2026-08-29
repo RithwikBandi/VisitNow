@@ -19,7 +19,7 @@ export function getSavedLocation(): string {
   }
 }
 
-export function LocationBar({ onChange }: { onChange?: (city: string) => void }) {
+export function LocationBar({ onChange, compact = false }: { onChange?: (city: string) => void; compact?: boolean }) {
   const [city, setCity] = useState(getSavedLocation)
   const [open, setOpen] = useState(false)
 
@@ -37,9 +37,13 @@ export function LocationBar({ onChange }: { onChange?: (city: string) => void })
   return (
     <>
       <button onClick={() => setOpen(true)} className="flex items-center gap-1.5 text-[13px] font-bold text-[var(--color-text)]">
-        <MapPin size={15} className="text-[var(--color-brand-600)]" aria-hidden="true" />
-        {city}
-        <span className="text-[var(--color-text-faint)]">· Change</span>
+        <MapPin size={15} className="shrink-0 text-[var(--color-brand-600)]" aria-hidden="true" />
+        {!compact && (
+          <>
+            {city}
+            <span className="text-[var(--color-text-faint)]">· Change</span>
+          </>
+        )}
       </button>
 
       {open &&

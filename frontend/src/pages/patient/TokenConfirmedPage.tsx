@@ -1,6 +1,7 @@
 import { CheckCircle2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/patient/BackLink'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
@@ -28,7 +29,10 @@ export function TokenConfirmedPage() {
   const code = entry.verificationCode ?? '----'
 
   return (
-    <div className="animate-rise-in flex flex-col items-center gap-6 pt-4 text-center">
+    <div className="animate-rise-in mx-auto flex max-w-xl flex-col items-center gap-6 text-center">
+      <div className="w-full text-left">
+        <BackLink />
+      </div>
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-success-bg)] text-[var(--color-success)]">
         <CheckCircle2 size={30} aria-hidden="true" />
       </div>

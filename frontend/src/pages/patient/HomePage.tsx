@@ -1,14 +1,14 @@
 import { ArrowRight, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ClinicCard } from '../../components/patient/ClinicCard'
 import { DoctorCard } from '../../components/patient/DoctorCard'
 import { SpecialtyFilter } from '../../components/patient/SpecialtyFilter'
-import { fetchQueueEntry, fetchTodaysSessions } from '../../lib/api'
+import { fetchClinics, fetchQueueEntry, fetchTodaysSessions } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
 import { getPatientIdentity } from '../../lib/patientIdentity'
 import { getMyVisitIds } from '../../lib/myVisits'
 import type { QueueEntry, SessionWithRelations } from '../../lib/types'
-import { LocationBar } from './LocationPicker'
 
 type SortMode = 'available' | 'alphabetical'
 
@@ -19,11 +19,7 @@ function isLive(s: SessionWithRelations): boolean {
 }
 
 /** Checks the most recent handful of the guest's own visit ids for one
- * that's still active, so Home can surface it prominently — the "your
- * active visit" banner is one of the strongest signals that VisitNow is
- * actually working, so it belongs at the very top of the app, not
- * buried in the Visits tab. Only checks a few, not the whole history,
- * since this runs on every Home load. */
+ * that's still active, so Home can surface it prominently. */
 function useActiveVisitBanner() {
   const [entry, setEntry] = useState<QueueEntry | null>(null)
 
@@ -51,8 +47,16 @@ function useActiveVisitBanner() {
   return entry
 }
 
+/**
+ * The discovery home — this is the page that most needed to stop
+ * looking like a phone screenshot. On a real desktop viewport this now
+ * uses the actual available width: a wide clinics row, a multi-column
+ * doctor grid (up to 5 columns on a large screen), the way Swiggy/
+ * Zomato's own *website* lays out, not their app.
+ */
 export function HomePage() {
   const { data, loading, error } = usePolling(fetchTodaysSessions, 15_000)
+  const { data: clinicsData } = usePolling(fetchClinics, 60_000)
   const [query, setQuery] = useState('')
   const [specialty, setSpecialty] = useState<string | null>(null)
   const [sort, setSort] = useState<SortMode>('available')
@@ -87,18 +91,7 @@ export function HomePage() {
   const rest = filtered.filter((s) => !isLive(s))
 
   return (
-    <div className="animate-rise-in flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[13px] font-semibold text-[var(--color-text-muted)]">
-            Good day, {identity?.name?.split(' ')[0] ?? 'there'} 👋
-          </p>
-          <div className="mt-0.5">
-            <LocationBar />
-          </div>
-        </div>
-      </div>
-
+    <div className="animate-rise-in flex flex-col gap-8">
       {activeVisit && (
         <Link
           to={`/queue/${activeVisit.id}`}
@@ -113,15 +106,16 @@ export function HomePage() {
       )}
 
       <div>
-        <h1 className="font-display text-[26px] font-bold leading-tight tracking-tight text-[var(--color-text)]">
+        <p className="text-sm font-semibold text-[var(--color-text-muted)]">Good day, {identity?.name?.split(' ')[0] ?? 'there'} 👋</p>
+        <h1 className="mt-1 font-display text-[30px] font-bold leading-tight tracking-tight text-[var(--color-text)] sm:text-[38px]">
           Skip the wait.
         </h1>
-        <p className="mt-1 text-[14px] text-[var(--color-text-muted)]">
+        <p className="mt-1 max-w-lg text-[15px] text-[var(--color-text-muted)]">
           Get your token remotely and track the queue until it's your turn.
         </p>
       </div>
 
-      <label className="flex items-center gap-2.5 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-3 shadow-[var(--shadow-sm)] transition-colors focus-within:border-[var(--color-brand-400)]">
+      <label className="flex items-center gap-2.5 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-3 shadow-[var(--shadow-sm)] transition-colors focus-within:border-[var(--color-brand-400)] sm:max-w-xl">
         <Search size={17} className="shrink-0 text-[var(--color-text-faint)]" aria-hidden="true" />
         <input
           value={query}
@@ -130,6 +124,24 @@ export function HomePage() {
           className="w-full min-w-0 bg-transparent text-[15px] text-[var(--color-text)] placeholder:text-[var(--color-text-faint)] focus:outline-none"
         />
       </label>
+
+      {clinicsData && clinicsData.clinics.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Clinics near you</h2>
+            <Link to="/clinics" className="text-[13px] font-bold text-[var(--color-brand-600)] hover:text-[var(--color-brand-700)]">
+              View all
+            </Link>
+          </div>
+          <div className="scrollbar-none -mx-4 flex gap-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+            {clinicsData.clinics.map((clinic) => (
+              <div key={clinic.id} className="w-64 shrink-0">
+                <ClinicCard clinic={clinic} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <SpecialtyFilter specialties={specialties} active={specialty} onChange={setSpecialty} />
 
@@ -144,8 +156,8 @@ export function HomePage() {
       </div>
 
       {loading && !data && (
-        <div className="grid grid-cols-2 gap-3">
-          {[0, 1, 2, 3].map((i) => (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {[0, 1, 2, 3, 4].map((i) => (
             <div key={i} className="aspect-[4/3] animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />
           ))}
         </div>
@@ -158,7 +170,7 @@ export function HomePage() {
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">
             Live now — join today
           </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {live.map((s) => (
               <DoctorCard key={s.id} session={s} />
             ))}
@@ -171,7 +183,7 @@ export function HomePage() {
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">
             {live.length > 0 ? 'Other sessions today' : 'Today'}
           </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {rest.map((s) => (
               <DoctorCard key={s.id} session={s} />
             ))}

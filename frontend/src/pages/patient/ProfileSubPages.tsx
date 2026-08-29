@@ -1,11 +1,17 @@
 import { AlertTriangle, Mail, MapPin, Phone } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BackLink } from '../../components/patient/BackLink'
 import { Button } from '../../components/ui/Button'
 import { clearPatientIdentity, getPatientIdentity, setPatientIdentity } from '../../lib/patientIdentity'
 
 function SubPageHeader({ title }: { title: string }) {
-  return <h1 className="mb-5 font-display text-2xl font-bold text-[var(--color-text)]">{title}</h1>
+  return (
+    <>
+      <BackLink label="Profile" />
+      <h1 className="mb-5 font-display text-2xl font-bold text-[var(--color-text)]">{title}</h1>
+    </>
+  )
 }
 
 export function EditProfilePage() {

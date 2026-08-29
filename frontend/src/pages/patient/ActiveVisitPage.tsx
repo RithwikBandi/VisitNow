@@ -29,7 +29,7 @@ export function ActiveVisitPage() {
   const youAreNext = entry.status === 'waiting' && patientsAhead === 0
 
   return (
-    <div className="animate-rise-in flex flex-col gap-5 pt-2">
+    <div className="animate-rise-in mx-auto flex max-w-xl flex-col gap-5">
       <div className="text-center">
         <p className="text-sm font-semibold text-[var(--color-text)]">{doctor.name}</p>
         <p className="text-xs text-[var(--color-text-muted)]">

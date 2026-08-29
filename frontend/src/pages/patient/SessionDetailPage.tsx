@@ -1,11 +1,14 @@
 import { ArrowRight } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/patient/BackLink'
+import { DateStrip } from '../../components/patient/DateStrip'
 import { Button } from '../../components/ui/Button'
 import { DoctorStatusLine } from '../../components/ui/Badge'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { fetchQueue, fetchSession } from '../../lib/api'
+import { fetchDoctor, fetchQueue, fetchSession } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
+import type { SessionWithRelations } from '../../lib/types'
 
 /**
  * Doctor + clinic + session, with **Get Token** as the one dominant
@@ -24,6 +27,26 @@ export function SessionDetailPage() {
   const { data: sessionData, loading, error } = usePolling(sessionFetcher, 5_000)
   const { data: queueData } = usePolling(queueFetcher, 5_000)
 
+  // Sibling dates for this exact doctor+clinic+slot — fetched once
+  // (not polled; which future dates exist doesn't change minute to
+  // minute the way queue state does) as soon as we know the doctor.
+  const [sameSlotDates, setSameSlotDates] = useState<SessionWithRelations[]>([])
+  useEffect(() => {
+    if (!sessionData) return
+    let cancelled = false
+    fetchDoctor(sessionData.doctor.id)
+      .then(({ sessions }) => {
+        if (cancelled) return
+        setSameSlotDates(sessions.filter((s) => s.clinicId === sessionData.session.clinicId && s.label === sessionData.session.label))
+      })
+      .catch(() => {
+        // Non-critical — the date strip just won't render if this fails.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sessionData])
+
   if (loading && !sessionData) {
     return <div className="mt-6 h-72 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />
   }
@@ -33,9 +56,12 @@ export function SessionDetailPage() {
   const { session, doctor, clinic } = sessionData
   const waitingCount = queueData?.entries.filter((e) => e.status === 'waiting').length ?? 0
   const canGetToken = session.doctorStatus !== 'closed'
+  const isToday = session.date === new Date().toISOString().slice(0, 10)
 
   return (
-    <div className="animate-rise-in flex flex-col gap-6">
+    <div className="animate-rise-in mx-auto flex max-w-xl flex-col gap-6">
+      <BackLink />
+
       <div className="relative h-36 w-full overflow-hidden rounded-[var(--radius-xl)] bg-[var(--color-border)] sm:h-48">
         {clinic.photoUrl && <img src={clinic.photoUrl} alt="" className="h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-transparent" />
@@ -63,6 +89,13 @@ export function SessionDetailPage() {
         </div>
       </div>
 
+      {sameSlotDates.length > 1 && (
+        <div>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Select date</p>
+          <DateStrip sessions={sameSlotDates} activeSessionId={session.id} />
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-3">
         <StatBlock label="Now serving" value={session.isQueueOpen ? (session.currentToken ?? '—') : '—'} />
         <StatBlock label="Waiting" value={session.isQueueOpen ? waitingCount : '—'} />
@@ -71,7 +104,9 @@ export function SessionDetailPage() {
 
       {!session.isQueueOpen && session.doctorStatus !== 'closed' && (
         <p className="rounded-[var(--radius-md)] bg-[var(--color-brand-50)] px-4 py-3 text-sm text-[var(--color-brand-700)]">
-          This session opens at {session.startTime}. Get your token now to hold your place in line.
+          {isToday
+            ? `This session opens at ${session.startTime}. Get your token now to hold your place in line.`
+            : `This session is on ${new Date(`${session.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}. Get your token now to hold your place.`}
         </p>
       )}
 
