@@ -6,7 +6,7 @@ export function ClinicCard({ clinic, subtitle }: { clinic: Clinic; subtitle?: st
   return (
     <Link
       to={`/clinics/${clinic.id}`}
-      className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-all hover:-translate-y-1 hover:shadow-[var(--shadow-md)]"
+      className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-all hover:-translate-y-1 hover:border-[var(--color-brand-300)] hover:shadow-[var(--shadow-md)]"
     >
       <div className="aspect-[16/9] w-full overflow-hidden bg-[var(--color-border)]">
         {clinic.photoUrl && (

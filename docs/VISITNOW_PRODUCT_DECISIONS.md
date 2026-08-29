@@ -313,7 +313,55 @@ own clinic's page. Fixed with `lib/sessions.ts`'s `dedupeByDoctorClinicSlot` —
 collapse to one card per doctor+clinic+label (preferring today's date), while SessionDetailPage's
 DateStrip still gets every date, since that's the one place all of them are actually relevant.
 
-## 12. Open questions (unresolved, flagged for a future decision)
+## 12. Feature-completeness pass — real bugs found, gateway demo built
+
+Follow-up feedback after §11: the site still read as thin — a real architectural bug in the date
+selector, a layout collision, no actual payment-method UI, a plain location list instead of the
+requested detect+grid pattern, and too little demo content for the discovery pages to feel real.
+Recorded here because two of these were genuine bugs, not missing polish, and worth remembering
+why they happened.
+
+**The date selector "not working" was a real bug in `usePolling`, not the DateStrip itself.**
+React Router does not remount a component when only its route param changes — clicking a date on
+SessionDetailPage navigates `/sessions/session-1` → `/sessions/session-2`, same component
+instance, new `sessionId` param. `usePolling`'s effect had `[intervalMs]` as its only dependency,
+so a fetcher that changed identity (new `sessionId` closed over) didn't trigger an immediate
+refetch — the page kept showing session-1's stale data (including the date strip's own "active"
+highlight, since that came from the stale `session.id`) until whatever was left of the *old*
+5-second interval happened to fire. Fixed by adding an explicit `resetKey` parameter to
+`usePolling` — every call site that fetches by a route param now passes that param as the key, so
+navigating between sibling resources refetches immediately, the same as a fresh mount would. This
+was a latent bug in every page that fetches by id, not just the one it was noticed on; all of them
+were patched, not just the one being tested.
+
+**The avatar/banner "collision" was a real layout bug.** SessionDetailPage overlapped the doctor's
+avatar onto the bottom of the clinic banner (a `-mt-9` negative-margin trick) at the same time the
+banner had its own bottom-left caption ("clinic name · location") — both elements wanted the same
+corner. Fixed by removing the overlap entirely: banner is now purely the photo, avatar and all text
+live in normal document flow below it. Simpler, and there's no longer a shared corner for two
+independent elements to fight over.
+
+**Payment gateway UI was built** (`PaymentGatewayModal`) — UPI/Card/Net Banking/Wallet method
+tabs, a UPI-id or card-number input with basic format validation, a processing spinner, a success
+state — inserted as a real step between "confirm fee + method" and token creation. It is not wired
+to any real payment provider (see §8.7) — the point is that a checkout *moment* exists and feels
+like one, not that money moves. Both `ONLINE` and `PAY_AT_HOSPITAL` route through it, since even
+the "pay at hospital" path still owes VisitNow's own ₹9 right now and needs a method to pay that
+with — "pay at hospital" was never "pay nothing online."
+
+**Location picker rebuilt** to match the requested workflow (search, a real `navigator.geolocation`
+"Detect my location" call, a Popular Cities icon grid) — using this project's own brand colors and
+icon choices, not the reference's literal visual style. Detecting a real position still resolves to
+Hyderabad, the only city the demo data actually covers — turning coordinates into a city name needs
+a reverse-geocoding API key this prototype doesn't have, and pretending otherwise would be worse
+than the honest simplification.
+
+**Demo data expanded** — 3 clinics/5 doctors read as a barely-populated placeholder on a real
+discovery grid; 5 clinics/9 doctors across 9 specialties, 3 simultaneously "live" sessions, is
+closer to what an actual local multi-specialty listing looks like. Same fictional-but-plausible
+naming convention as the original seed data (§21 in the original brief).
+
+## 13. Open questions (unresolved, flagged for a future decision)
 
 - **Real patient auth.** Login/Register currently collect a name+phone and function identically
   to Guest — no password is verified against anything (see §8.10 sibling reasoning: there's

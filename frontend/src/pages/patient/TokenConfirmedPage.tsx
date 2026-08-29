@@ -17,7 +17,7 @@ export function TokenConfirmedPage() {
   const { entryId } = useParams<{ entryId: string }>()
   const navigate = useNavigate()
   const fetcher = useCallback(() => fetchQueueEntry(entryId!), [entryId])
-  const { data, loading, error } = usePolling(fetcher, 30_000)
+  const { data, loading, error } = usePolling(fetcher, 30_000, entryId)
 
   if (loading && !data) {
     return <div className="mt-8 h-96 animate-pulse rounded-[var(--radius-xl)] bg-[var(--color-border)]/40" />

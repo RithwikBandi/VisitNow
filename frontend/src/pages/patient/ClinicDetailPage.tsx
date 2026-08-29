@@ -15,7 +15,7 @@ import { dedupeByDoctorClinicSlot } from '../../lib/sessions'
 export function ClinicDetailPage() {
   const { clinicId } = useParams<{ clinicId: string }>()
   const fetcher = useCallback(() => fetchClinic(clinicId!), [clinicId])
-  const { data, loading, error } = usePolling(fetcher, 15_000)
+  const { data, loading, error } = usePolling(fetcher, 15_000, clinicId)
 
   const specialties = useMemo(() => [...new Set((data?.sessions ?? []).map((s) => s.doctor.specialty))].sort(), [data])
 

@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, MapPin } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { BackLink } from '../../components/patient/BackLink'
@@ -24,8 +24,8 @@ export function SessionDetailPage() {
 
   const sessionFetcher = useCallback(() => fetchSession(sessionId!), [sessionId])
   const queueFetcher = useCallback(() => fetchQueue(sessionId!), [sessionId])
-  const { data: sessionData, loading, error } = usePolling(sessionFetcher, 5_000)
-  const { data: queueData } = usePolling(queueFetcher, 5_000)
+  const { data: sessionData, loading, error } = usePolling(sessionFetcher, 5_000, sessionId)
+  const { data: queueData } = usePolling(queueFetcher, 5_000, sessionId)
 
   // Sibling dates for this exact doctor+clinic+slot — fetched once
   // (not polled; which future dates exist doesn't change minute to
@@ -62,21 +62,25 @@ export function SessionDetailPage() {
     <div className="animate-rise-in mx-auto flex max-w-xl flex-col gap-6">
       <BackLink />
 
-      <div className="relative h-36 w-full overflow-hidden rounded-[var(--radius-xl)] bg-[var(--color-border)] sm:h-48">
+      {/* No overlapping-avatar trick here — it collided with this
+          banner's own caption text (both wanted the same bottom-left
+          corner). Banner is purely the clinic photo; everything else
+          lives in normal document flow below it. */}
+      <div className="h-36 w-full overflow-hidden rounded-[var(--radius-xl)] bg-[var(--color-border)] sm:h-48">
         {clinic.photoUrl && <img src={clinic.photoUrl} alt="" className="h-full w-full object-cover" />}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-transparent" />
-        <p className="absolute bottom-3 left-4 text-[13px] font-semibold text-white">
-          {clinic.name} · {clinic.location}
-        </p>
       </div>
 
-      <div className="-mt-9 flex items-end gap-3.5 px-3 sm:-mt-11">
-        <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full border-[3px] border-[var(--color-bg)] bg-[var(--color-border)] shadow-[var(--shadow-sm)] sm:h-[88px] sm:w-[88px]">
+      <div className="flex items-center gap-3.5">
+        <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full bg-[var(--color-border)] shadow-[var(--shadow-sm)] sm:h-[88px] sm:w-[88px]">
           {doctor.photoUrl && <img src={doctor.photoUrl} alt="" className="h-full w-full object-cover" />}
         </div>
-        <div className="pb-1">
+        <div>
           <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
           <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--color-text)] sm:text-3xl">{doctor.name}</h1>
+          <p className="mt-0.5 flex items-center gap-1 text-[13px] text-[var(--color-text-muted)]">
+            <MapPin size={12} className="shrink-0" aria-hidden="true" />
+            {clinic.name} · {clinic.location}
+          </p>
         </div>
       </div>
 

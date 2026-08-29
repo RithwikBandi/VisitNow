@@ -17,7 +17,7 @@ const POLL_MS = 3_000
 export function ActiveVisitPage() {
   const { entryId } = useParams<{ entryId: string }>()
   const fetcher = useCallback(() => fetchQueueEntry(entryId!), [entryId])
-  const { data, loading, error } = usePolling(fetcher, POLL_MS)
+  const { data, loading, error } = usePolling(fetcher, POLL_MS, entryId)
 
   if (loading && !data) {
     return <div className="mt-6 h-[32rem] animate-pulse rounded-[var(--radius-xl)] bg-[var(--color-border)]/40" />

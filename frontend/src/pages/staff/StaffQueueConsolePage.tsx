@@ -26,8 +26,8 @@ export function StaffQueueConsolePage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const sessionFetcher = useCallback(() => fetchSession(sessionId!), [sessionId])
   const queueFetcher = useCallback(() => fetchQueue(sessionId!), [sessionId])
-  const { data: sessionData, error: sessionError, refresh: refreshSession } = usePolling(sessionFetcher, 4_000)
-  const { data: queueData, refresh: refreshQueue } = usePolling(queueFetcher, 4_000)
+  const { data: sessionData, error: sessionError, refresh: refreshSession } = usePolling(sessionFetcher, 4_000, sessionId)
+  const { data: queueData, refresh: refreshQueue } = usePolling(queueFetcher, 4_000, sessionId)
 
   const [walkInName, setWalkInName] = useState('')
   const [busy, setBusy] = useState(false)

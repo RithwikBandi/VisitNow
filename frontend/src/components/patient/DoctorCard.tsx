@@ -19,7 +19,7 @@ export function DoctorCard({ session }: { session: SessionWithRelations }) {
   return (
     <Link
       to={`/sessions/${session.id}`}
-      className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-all hover:-translate-y-1 hover:shadow-[var(--shadow-md)]"
+      className="group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] transition-all hover:-translate-y-1 hover:border-[var(--color-brand-300)] hover:shadow-[var(--shadow-md)]"
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-[var(--color-border)]">
         {session.doctor.photoUrl && (

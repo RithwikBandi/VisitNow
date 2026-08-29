@@ -11,7 +11,7 @@ import { dedupeByDoctorClinicSlot } from '../../lib/sessions'
 export function DoctorPage() {
   const { doctorId } = useParams<{ doctorId: string }>()
   const fetcher = useCallback(() => fetchDoctor(doctorId!), [doctorId])
-  const { data, loading, error } = usePolling(fetcher, 15_000)
+  const { data, loading, error } = usePolling(fetcher, 15_000, doctorId)
 
   if (loading && !data) {
     return <div className="mt-4 h-64 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />

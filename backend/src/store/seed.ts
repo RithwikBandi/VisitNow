@@ -340,6 +340,142 @@ export function seedDemoData(): void {
     doctorStatus: 'closed',
     isQueueOpen: false,
   })
+
+  // --- More clinics + doctors — a 3-clinic, 5-doctor demo reads thin on
+  // a real discovery grid; this rounds it out closer to what an actual
+  // local multi-specialty listing looks like. ------------------------
+  const metroDiagnostics = addClinic({
+    name: 'Metro Diagnostics & Clinic',
+    location: 'Ameerpet Main Road',
+    city: 'Hyderabad',
+    photoUrl: clinicPhoto('metro-diagnostics-clinic'),
+  })
+  const lakeview = addClinic({
+    name: 'Lakeview Family Health Center',
+    location: 'Necklace Road',
+    city: 'Hyderabad',
+    photoUrl: clinicPhoto('lakeview-family-health'),
+  })
+
+  const drReddy = addDoctor({
+    name: 'Dr. Kavya Reddy',
+    specialty: 'Cardiologist',
+    qualifications: 'MBBS, DM (Cardiology)',
+    photoUrl: doctorPhoto('dr-kavya-reddy'),
+  })
+  const drMehta = addDoctor({
+    name: 'Dr. Arjun Mehta',
+    specialty: 'Dentist',
+    qualifications: 'BDS, MDS (Orthodontics)',
+    photoUrl: doctorPhoto('dr-arjun-mehta'),
+  })
+  const drSowmya = addDoctor({
+    name: 'Dr. Sowmya Rao',
+    specialty: 'Gynecologist',
+    qualifications: 'MBBS, MS (OBG)',
+    photoUrl: doctorPhoto('dr-sowmya-rao'),
+  })
+  const drChoudhary = addDoctor({
+    name: 'Dr. Vikram Choudhary',
+    specialty: 'Psychiatrist',
+    qualifications: 'MBBS, MD (Psychiatry)',
+    photoUrl: doctorPhoto('dr-vikram-choudhary'),
+  })
+
+  // A second live session, so the "Live now" row on Home has more than
+  // two entries to actually demonstrate a grid with.
+  const reddyMorning = addSession({
+    doctorId: drReddy.id,
+    clinicId: metroDiagnostics.id,
+    label: 'Morning Session',
+    startTime: '09:00',
+    endTime: '13:00',
+    avgConsultMinutes: 10,
+    hospitalFeeAmount: 800,
+    doctorStatus: 'available',
+    isQueueOpen: true,
+    nextTokenNumber: 9,
+    currentToken: 5,
+  })
+  for (let t = 1; t <= 4; t++) {
+    addEntry({
+      sessionId: reddyMorning.id,
+      tokenNumber: t,
+      source: t % 2 === 0 ? 'offline' : 'online',
+      priority: 'regular',
+      status: 'completed',
+      patientName: DEMO_NAMES[(t + 8) % DEMO_NAMES.length],
+      completedAt: new Date(Date.now() - (5 - t) * 10 * 60_000).toISOString(),
+    })
+  }
+  addEntry({
+    sessionId: reddyMorning.id,
+    tokenNumber: 5,
+    source: 'online',
+    priority: 'regular',
+    status: 'in_progress',
+    patientName: 'Imran Shaikh',
+    calledAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+    startedAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+  })
+  addEntry({ sessionId: reddyMorning.id, tokenNumber: 6, source: 'offline', priority: 'regular', status: 'waiting', patientName: 'Priyanka Nair' })
+  addEntry({
+    sessionId: reddyMorning.id,
+    tokenNumber: 7,
+    source: 'online',
+    priority: 'regular',
+    status: 'waiting',
+    patientName: 'Meenakshi Iyengar',
+    ...onlinePayment('ONLINE', 800, '7743'),
+  })
+  addEntry({ sessionId: reddyMorning.id, tokenNumber: 8, source: 'offline', priority: 'regular', status: 'waiting', patientName: 'Rakesh Bommidi' })
+
+  addSession({
+    doctorId: drMehta.id,
+    clinicId: lakeview.id,
+    label: 'Evening Session',
+    startTime: '16:00',
+    endTime: '19:00',
+    avgConsultMinutes: 15,
+    hospitalFeeAmount: 350,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drSowmya.id,
+    clinicId: cityCare.id,
+    label: 'Morning Session',
+    startTime: '10:00',
+    endTime: '13:00',
+    avgConsultMinutes: 12,
+    hospitalFeeAmount: 650,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drChoudhary.id,
+    clinicId: lakeview.id,
+    label: 'Morning Session',
+    startTime: '09:30',
+    endTime: '12:30',
+    avgConsultMinutes: 20,
+    hospitalFeeAmount: 900,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  // Same cardiologist, a second clinic in the evening — another real
+  // example of the "one doctor, two clinics" concept beyond Dr. Kumar.
+  addSession({
+    doctorId: drReddy.id,
+    clinicId: lakeview.id,
+    label: 'Evening Session',
+    startTime: '17:00',
+    endTime: '20:00',
+    avgConsultMinutes: 10,
+    hospitalFeeAmount: 800,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
 }
 
 // Excludes 'Lakshmi Narayan' and 'Anitha George' — both used explicitly

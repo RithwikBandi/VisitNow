@@ -112,7 +112,7 @@ export function VisitsPage() {
             <Link
               key={entry.id}
               to={tabFor(entry.status) === 'active' ? `/queue/${entry.id}` : `/queue/${entry.id}/confirmed`}
-              className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+              className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-colors hover:border-[var(--color-brand-300)] hover:bg-[var(--color-brand-50)]/40"
             >
               <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[var(--color-border)]">
                 {doctor.photoUrl && <img src={doctor.photoUrl} alt="" className="h-full w-full object-cover" />}

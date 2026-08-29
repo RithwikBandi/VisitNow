@@ -2,6 +2,7 @@ import { Check, CreditCard, Wallet } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { BackLink } from '../../components/patient/BackLink'
+import { PaymentGatewayModal } from '../../components/patient/PaymentGatewayModal'
 import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { fetchSession, generateToken } from '../../lib/api'
@@ -23,7 +24,7 @@ export function TokenPaymentPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
   const fetcher = useCallback(() => fetchSession(sessionId!), [sessionId])
-  const { data, loading, error } = usePolling(fetcher, 30_000)
+  const { data, loading, error } = usePolling(fetcher, 30_000, sessionId)
 
   const identity = getPatientIdentity()
   const [method, setMethod] = useState<PaymentMethod>('ONLINE')
@@ -31,6 +32,7 @@ export function TokenPaymentPage() {
   const [phone, setPhone] = useState(identity?.phone ?? '')
   const [processing, setProcessing] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [showGateway, setShowGateway] = useState(false)
 
   if (loading && !data) {
     return <div className="mt-6 h-80 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />
@@ -43,17 +45,22 @@ export function TokenPaymentPage() {
   const payNow = method === 'ONLINE' ? hospitalFee + PLATFORM_FEE_INR : PLATFORM_FEE_INR
   const payLater = method === 'ONLINE' ? 0 : hospitalFee
 
-  const submit = async () => {
+  // Opens the demo gateway rather than creating the token directly — the
+  // gateway's own "Pay ₹X" is the real point of commitment now, matching
+  // how an actual checkout works. Only its onSuccess actually creates
+  // the token (see completeToken below).
+  const openGateway = () => {
     if (!name.trim()) {
       setFormError('Enter your name to continue.')
       return
     }
     setFormError(null)
+    setShowGateway(true)
+  }
+
+  const completeToken = async () => {
     setProcessing(true)
     try {
-      // Simulated gateway delay — long enough to read as "processing,"
-      // not so long it feels broken. See the module docstring above.
-      await new Promise((r) => setTimeout(r, 900))
       const { entry } = await generateToken(session.id, {
         source: 'online',
         patientName: name.trim(),
@@ -63,8 +70,9 @@ export function TokenPaymentPage() {
       addMyVisitId(entry.id)
       navigate(`/queue/${entry.id}/confirmed`, { replace: true })
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Payment could not be completed. Please try again.')
+      setShowGateway(false)
       setProcessing(false)
+      setFormError(err instanceof ApiError ? err.message : 'Something went wrong generating your token. Please try again.')
     }
   }
 
@@ -134,10 +142,18 @@ export function TokenPaymentPage() {
             <span>₹{payLater}</span>
           </div>
         )}
-        <Button size="lg" className="mt-1 w-full" disabled={processing} onClick={submit}>
-          {processing ? 'Processing…' : `Pay ₹${payNow} & Get Token`}
+        <Button size="lg" className="mt-1 w-full" disabled={processing} onClick={openGateway}>
+          {`Pay ₹${payNow} & Get Token`}
         </Button>
       </div>
+
+      {showGateway && (
+        <PaymentGatewayModal
+          amount={payNow}
+          onCancel={() => setShowGateway(false)}
+          onSuccess={completeToken}
+        />
+      )}
     </div>
   )
 }
