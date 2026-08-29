@@ -32,15 +32,18 @@ sessionsRouter.get('/sessions/:id/queue', (req, res) => {
  * call this — only `source` differs. Priority is deliberately not
  * accepted here; see setPriority in queueEntries.ts and the brief's §8. */
 sessionsRouter.post('/sessions/:id/token', (req, res) => {
-  const { source, patientName, patientPhone } = req.body ?? {}
+  const { source, patientName, patientPhone, paymentMethod } = req.body ?? {}
   if (source !== 'online' && source !== 'offline') {
     return res.status(422).json({ error: "source must be 'online' or 'offline'." })
   }
   if (!patientName || typeof patientName !== 'string' || !patientName.trim()) {
     return res.status(422).json({ error: 'patientName is required.' })
   }
+  if (source === 'online' && paymentMethod !== 'ONLINE' && paymentMethod !== 'PAY_AT_HOSPITAL') {
+    return res.status(422).json({ error: "paymentMethod must be 'ONLINE' or 'PAY_AT_HOSPITAL' for an online token." })
+  }
   try {
-    const entry = generateToken(req.params.id, { source, patientName: patientName.trim(), patientPhone })
+    const entry = generateToken(req.params.id, { source, patientName: patientName.trim(), patientPhone, paymentMethod })
     res.status(201).json({ entry })
   } catch (err) {
     if (err instanceof QueueEngineError) return res.status(err.status).json({ error: err.message })

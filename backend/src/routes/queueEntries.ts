@@ -2,7 +2,7 @@
  * skip/complete/no-show/priority buttons, and the patient side's single
  * "track my token" read. */
 import { Router, type Response } from 'express'
-import { queueEntries, sessions } from '../store/store.js'
+import { clinics, doctors, queueEntries, sessions } from '../store/store.js'
 import {
   QueueEngineError,
   cancelEntry,
@@ -40,8 +40,10 @@ queueEntriesRouter.get('/queue-entries/:id', (req, res) => {
   const entry = queueEntries.get(req.params.id)
   if (!entry) return res.status(404).json({ error: 'No such queue entry.' })
   const session = sessions.get(entry.sessionId)
+  const doctor = session ? doctors.get(session.doctorId) : undefined
+  const clinic = session ? clinics.get(session.clinicId) : undefined
   const { patientsAhead, estimatedMinutes } = estimateWait(entry.sessionId, entry.id)
-  res.json({ entry, session, patientsAhead, estimatedMinutes })
+  res.json({ entry, session, doctor, clinic, patientsAhead, estimatedMinutes })
 })
 
 queueEntriesRouter.post('/queue-entries/:id/start', (req, res) => {

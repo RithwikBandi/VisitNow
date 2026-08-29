@@ -11,7 +11,7 @@
  * present) so the demo has something worth looking at the moment the
  * server starts, without requiring a click-through setup first.
  */
-import type { Clinic, Doctor, QueueEntry, Session } from '../types/index.js'
+import { PLATFORM_FEE_INR, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type Session } from '../types/index.js'
 import { clinics, doctors, nextId, queueEntries, sessions } from './store.js'
 
 const today = new Date().toISOString().slice(0, 10)
@@ -57,6 +57,22 @@ function addEntry(e: Omit<QueueEntry, 'id' | 'createdAt'> & { createdAt?: string
   const entry: QueueEntry = { id: nextId('queue'), createdAt: e.createdAt ?? new Date().toISOString(), ...e }
   queueEntries.set(entry.id, entry)
   return entry
+}
+
+/** Fills in an online entry's payment fields the same way
+ * queueEngine.generateToken does at runtime, for seed entries built
+ * directly rather than through that function. `code` is hardcoded here
+ * (not randomly generated) purely so demo runs are reproducible run to
+ * run — real online tokens still get a random one, see queueEngine.ts. */
+function onlinePayment(method: PaymentMethod, hospitalFeeAmount: number, code: string) {
+  return {
+    paymentMethod: method,
+    hospitalFeeAmount,
+    platformFeeAmount: PLATFORM_FEE_INR,
+    platformFeeStatus: 'PAID' as const,
+    hospitalFeeStatus: method === 'ONLINE' ? ('PAID' as const) : ('DUE' as const),
+    verificationCode: code,
+  }
 }
 
 export function seedDemoData(): void {
@@ -120,6 +136,7 @@ export function seedDemoData(): void {
     startTime: '08:00',
     endTime: '12:00',
     avgConsultMinutes: 6,
+    hospitalFeeAmount: 500,
     doctorStatus: 'available',
     isQueueOpen: true,
     nextTokenNumber: 26,
@@ -148,7 +165,15 @@ export function seedDemoData(): void {
     startedAt: new Date(Date.now() - 2 * 60_000).toISOString(),
   })
   addEntry({ sessionId: kumarMorning.id, tokenNumber: 18, source: 'offline', priority: 'regular', status: 'waiting', patientName: 'Sandhya Reddy' })
-  addEntry({ sessionId: kumarMorning.id, tokenNumber: 19, source: 'online', priority: 'regular', status: 'waiting', patientName: 'Farhan Ahmed' })
+  addEntry({
+    sessionId: kumarMorning.id,
+    tokenNumber: 19,
+    source: 'online',
+    priority: 'regular',
+    status: 'waiting',
+    patientName: 'Farhan Ahmed',
+    ...onlinePayment('ONLINE', 500, '4127'),
+  })
   addEntry({
     sessionId: kumarMorning.id,
     tokenNumber: 20,
@@ -158,11 +183,35 @@ export function seedDemoData(): void {
     patientName: 'Lakshmi Narayan',
     priorityAssignedBy: 'Front Desk — Sunrise',
   })
-  addEntry({ sessionId: kumarMorning.id, tokenNumber: 21, source: 'online', priority: 'regular', status: 'waiting', patientName: 'Divya Chowdary' })
+  addEntry({
+    sessionId: kumarMorning.id,
+    tokenNumber: 21,
+    source: 'online',
+    priority: 'regular',
+    status: 'waiting',
+    patientName: 'Divya Chowdary',
+    ...onlinePayment('PAY_AT_HOSPITAL', 500, '8352'),
+  })
   addEntry({ sessionId: kumarMorning.id, tokenNumber: 22, source: 'appointment', priority: 'regular', status: 'waiting', patientName: 'Kiran Bathula' })
-  addEntry({ sessionId: kumarMorning.id, tokenNumber: 23, source: 'online', priority: 'regular', status: 'waiting', patientName: 'Manoj Pillai' })
+  addEntry({
+    sessionId: kumarMorning.id,
+    tokenNumber: 23,
+    source: 'online',
+    priority: 'regular',
+    status: 'waiting',
+    patientName: 'Manoj Pillai',
+    ...onlinePayment('ONLINE', 500, '2769'),
+  })
   addEntry({ sessionId: kumarMorning.id, tokenNumber: 24, source: 'offline', priority: 'regular', status: 'skipped', patientName: 'Ganesh Patil' })
-  addEntry({ sessionId: kumarMorning.id, tokenNumber: 25, source: 'online', priority: 'regular', status: 'waiting', patientName: 'Aditi Varma' })
+  addEntry({
+    sessionId: kumarMorning.id,
+    tokenNumber: 25,
+    source: 'online',
+    priority: 'regular',
+    status: 'waiting',
+    patientName: 'Aditi Varma',
+    ...onlinePayment('PAY_AT_HOSPITAL', 500, '6041'),
+  })
 
   // Dr. Kumar's evening session — a different clinic, a different day
   // part, the same doctor: the "sessions, not doctors, own queues" point.
@@ -173,6 +222,7 @@ export function seedDemoData(): void {
     startTime: '17:00',
     endTime: '21:00',
     avgConsultMinutes: 6,
+    hospitalFeeAmount: 550,
     doctorStatus: 'available',
     isQueueOpen: false,
   })
@@ -185,16 +235,34 @@ export function seedDemoData(): void {
     startTime: '14:00',
     endTime: '18:00',
     avgConsultMinutes: 8,
+    hospitalFeeAmount: 700,
     doctorStatus: 'delayed',
     delayMinutes: 20,
     isQueueOpen: true,
     nextTokenNumber: 6,
     currentToken: 3,
   })
-  addEntry({ sessionId: raoAfternoon.id, tokenNumber: 1, source: 'online', priority: 'regular', status: 'completed', patientName: 'Neha Kapoor', completedAt: new Date(Date.now() - 30 * 60_000).toISOString() })
+  addEntry({
+    sessionId: raoAfternoon.id,
+    tokenNumber: 1,
+    source: 'online',
+    priority: 'regular',
+    status: 'completed',
+    patientName: 'Neha Kapoor',
+    completedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+    ...onlinePayment('ONLINE', 700, '5518'),
+  })
   addEntry({ sessionId: raoAfternoon.id, tokenNumber: 2, source: 'offline', priority: 'regular', status: 'completed', patientName: 'Vikram Shetty', completedAt: new Date(Date.now() - 20 * 60_000).toISOString() })
-  addEntry({ sessionId: raoAfternoon.id, tokenNumber: 3, source: 'online', priority: 'emergency', status: 'called', patientName: 'Anitha George', calledAt: new Date(Date.now() - 5 * 60_000).toISOString(), priorityAssignedBy: 'Dr. Priya Rao' })
-  addEntry({ sessionId: raoAfternoon.id, tokenNumber: 4, source: 'online', priority: 'regular', status: 'waiting', patientName: 'Rohit Malhotra' })
+  addEntry({ sessionId: raoAfternoon.id, tokenNumber: 3, source: 'online', priority: 'emergency', status: 'called', patientName: 'Anitha George', calledAt: new Date(Date.now() - 5 * 60_000).toISOString(), priorityAssignedBy: 'Dr. Priya Rao', ...onlinePayment('PAY_AT_HOSPITAL', 700, '9204') })
+  addEntry({
+    sessionId: raoAfternoon.id,
+    tokenNumber: 4,
+    source: 'online',
+    priority: 'regular',
+    status: 'waiting',
+    patientName: 'Rohit Malhotra',
+    ...onlinePayment('ONLINE', 700, '3386'),
+  })
   addEntry({ sessionId: raoAfternoon.id, tokenNumber: 5, source: 'offline', priority: 'regular', status: 'waiting', patientName: 'Swathi Reddy' })
 
   // --- Upcoming sessions (not yet open) — for the "find a doctor" flow --
@@ -205,6 +273,7 @@ export function seedDemoData(): void {
     startTime: '09:00',
     endTime: '13:00',
     avgConsultMinutes: 10,
+    hospitalFeeAmount: 400,
     doctorStatus: 'available',
     isQueueOpen: false,
   })
@@ -215,6 +284,7 @@ export function seedDemoData(): void {
     startTime: '08:30',
     endTime: '11:30',
     avgConsultMinutes: 12,
+    hospitalFeeAmount: 600,
     doctorStatus: 'available',
     isQueueOpen: false,
   })
@@ -225,6 +295,7 @@ export function seedDemoData(): void {
     startTime: '18:00',
     endTime: '20:30',
     avgConsultMinutes: 9,
+    hospitalFeeAmount: 450,
     doctorStatus: 'closed',
     isQueueOpen: false,
   })

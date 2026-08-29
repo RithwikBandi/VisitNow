@@ -1,0 +1,105 @@
+import { ArrowRight } from 'lucide-react'
+import { useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Button } from '../../components/ui/Button'
+import { DoctorStatusLine } from '../../components/ui/Badge'
+import { ErrorState } from '../../components/ui/ErrorState'
+import { fetchQueue, fetchSession } from '../../lib/api'
+import { usePolling } from '../../hooks/usePolling'
+
+/**
+ * Doctor + clinic + session, with **Get Token** as the one dominant
+ * action — no equal-weight "Book Appointment" button sitting next to it
+ * (see docs/VISITNOW_PRODUCT_DECISIONS.md §1: this app is token-first,
+ * not appointment-first). Tapping it goes to the fee/payment step
+ * (TokenPaymentPage), not straight to a token — a real token now always
+ * has a payment decision attached to it.
+ */
+export function SessionDetailPage() {
+  const { sessionId } = useParams<{ sessionId: string }>()
+  const navigate = useNavigate()
+
+  const sessionFetcher = useCallback(() => fetchSession(sessionId!), [sessionId])
+  const queueFetcher = useCallback(() => fetchQueue(sessionId!), [sessionId])
+  const { data: sessionData, loading, error } = usePolling(sessionFetcher, 5_000)
+  const { data: queueData } = usePolling(queueFetcher, 5_000)
+
+  if (loading && !sessionData) {
+    return <div className="mt-6 h-72 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />
+  }
+  if (error && !sessionData) return <ErrorState message={error} />
+  if (!sessionData) return null
+
+  const { session, doctor, clinic } = sessionData
+  const waitingCount = queueData?.entries.filter((e) => e.status === 'waiting').length ?? 0
+  const canGetToken = session.doctorStatus !== 'closed'
+
+  return (
+    <div className="animate-rise-in flex flex-col gap-6">
+      <div className="relative h-36 w-full overflow-hidden rounded-[var(--radius-xl)] bg-[var(--color-border)] sm:h-48">
+        {clinic.photoUrl && <img src={clinic.photoUrl} alt="" className="h-full w-full object-cover" />}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-transparent" />
+        <p className="absolute bottom-3 left-4 text-[13px] font-semibold text-white">
+          {clinic.name} · {clinic.location}
+        </p>
+      </div>
+
+      <div className="-mt-9 flex items-end gap-3.5 px-3 sm:-mt-11">
+        <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full border-[3px] border-[var(--color-bg)] bg-[var(--color-border)] shadow-[var(--shadow-sm)] sm:h-[88px] sm:w-[88px]">
+          {doctor.photoUrl && <img src={doctor.photoUrl} alt="" className="h-full w-full object-cover" />}
+        </div>
+        <div className="pb-1">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--color-text)] sm:text-3xl">{doctor.name}</h1>
+        </div>
+      </div>
+
+      <div className="px-1">
+        <p className="text-sm text-[var(--color-text-muted)]">
+          {session.label} · {session.startTime}–{session.endTime}
+        </p>
+        <div className="mt-2">
+          <DoctorStatusLine status={session.doctorStatus} delayMinutes={session.delayMinutes} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <StatBlock label="Now serving" value={session.isQueueOpen ? (session.currentToken ?? '—') : '—'} />
+        <StatBlock label="Waiting" value={session.isQueueOpen ? waitingCount : '—'} />
+        <StatBlock label="Token fee" value={`₹${session.hospitalFeeAmount}`} />
+      </div>
+
+      {!session.isQueueOpen && session.doctorStatus !== 'closed' && (
+        <p className="rounded-[var(--radius-md)] bg-[var(--color-brand-50)] px-4 py-3 text-sm text-[var(--color-brand-700)]">
+          This session opens at {session.startTime}. Get your token now to hold your place in line.
+        </p>
+      )}
+
+      <div className="sticky bottom-4">
+        <Button
+          size="lg"
+          className="w-full"
+          disabled={!canGetToken}
+          onClick={() => navigate(`/sessions/${session.id}/token`)}
+        >
+          {canGetToken ? 'Get Token' : 'Session closed'}
+          {canGetToken && <ArrowRight size={17} aria-hidden="true" />}
+        </Button>
+        {canGetToken && (
+          <p className="mt-2 text-center text-xs text-[var(--color-text-faint)]">
+            No need to visit the clinic just to join the queue.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function StatBlock({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3.5 text-center">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">{label}</p>
+      <p className="mt-1 font-display text-xl font-bold text-[var(--color-text)]">{value}</p>
+    </div>
+  )
+}

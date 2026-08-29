@@ -4,7 +4,15 @@
  * status transitions that don't care whether an entry's source is
  * online, offline, or a converted appointment.
  */
-import { QUEUE_TRANSITIONS, type QueueEntry, type QueuePriority, type QueueStatus, type Session } from '../types/index.js'
+import {
+  PLATFORM_FEE_INR,
+  QUEUE_TRANSITIONS,
+  type PaymentMethod,
+  type QueueEntry,
+  type QueuePriority,
+  type QueueStatus,
+  type Session,
+} from '../types/index.js'
 import { nextId, queueEntries, queueEntriesForSession, sessions } from './store.js'
 
 export class QueueEngineError extends Error {
@@ -62,14 +70,38 @@ export function waitingQueue(sessionId: string): QueueEntry[] {
   return fullQueue(sessionId).filter((e) => e.status === 'waiting')
 }
 
+/** 4 digits, unique among this session's currently non-terminal entries
+ * — see decisions log §8.10 for why that scope (not globally unique) is
+ * the right one, and why a small collision surface is an accepted
+ * trade-off for what is a lookup key, not a credential. */
+function generateVerificationCode(sessionId: string): string {
+  const taken = new Set(
+    queueEntriesForSession(sessionId)
+      .filter((e) => !['completed', 'cancelled', 'no_show'].includes(e.status))
+      .map((e) => e.verificationCode)
+      .filter(Boolean),
+  )
+  let code: string
+  do {
+    code = String(Math.floor(1000 + Math.random() * 9000))
+  } while (taken.has(code))
+  return code
+}
+
 export function generateToken(
   sessionId: string,
-  input: { source: QueueEntry['source']; patientName: string; patientPhone?: string },
+  input: { source: QueueEntry['source']; patientName: string; patientPhone?: string; paymentMethod?: PaymentMethod },
 ): QueueEntry {
   const session = getSessionOrThrow(sessionId)
   if (session.doctorStatus === 'closed') {
     throw new QueueEngineError('This session is closed — new tokens are not being issued.')
   }
+
+  const isOnline = input.source === 'online'
+  if (isOnline && !input.paymentMethod) {
+    throw new QueueEngineError('paymentMethod is required for an online token.')
+  }
+
   const entry: QueueEntry = {
     id: nextId('queue'),
     sessionId,
@@ -84,6 +116,23 @@ export function generateToken(
     patientPhone: input.patientPhone,
     createdAt: new Date().toISOString(),
   }
+
+  // Payment + verification code only apply to online tokens — see the
+  // QueueEntry field docs in types/index.ts and decisions log §3/§6. A
+  // walk-in never goes through VisitNow's payment step at all.
+  if (isOnline) {
+    entry.paymentMethod = input.paymentMethod
+    entry.hospitalFeeAmount = session.hospitalFeeAmount
+    entry.platformFeeAmount = PLATFORM_FEE_INR
+    // Token creation *is* the payment confirmation in this prototype —
+    // there's no separate gateway step that could leave this pending.
+    // See decisions log §8.7 for exactly why, and what a real
+    // integration would need to do differently.
+    entry.platformFeeStatus = 'PAID'
+    entry.hospitalFeeStatus = input.paymentMethod === 'ONLINE' ? 'PAID' : 'DUE'
+    entry.verificationCode = generateVerificationCode(sessionId)
+  }
+
   session.nextTokenNumber += 1
   queueEntries.set(entry.id, entry)
   return entry

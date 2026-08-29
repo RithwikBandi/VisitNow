@@ -9,6 +9,11 @@ export type QueueSource = 'online' | 'offline' | 'appointment'
 export type QueuePriority = 'regular' | 'priority' | 'emergency'
 export type QueueStatus = 'waiting' | 'called' | 'in_progress' | 'completed' | 'skipped' | 'cancelled' | 'no_show'
 export type DoctorStatus = 'available' | 'delayed' | 'paused' | 'closed'
+export type PaymentMethod = 'ONLINE' | 'PAY_AT_HOSPITAL'
+export type FeeStatus = 'PAID' | 'DUE'
+
+/** Fixed for this prototype — see docs/VISITNOW_PRODUCT_DECISIONS.md §3. */
+export const PLATFORM_FEE_INR = 9
 
 export interface Clinic {
   id: string
@@ -35,6 +40,7 @@ export interface Session {
   startTime: string
   endTime: string
   avgConsultMinutes: number
+  hospitalFeeAmount: number
   doctorStatus: DoctorStatus
   delayMinutes?: number
   isQueueOpen: boolean
@@ -61,6 +67,13 @@ export interface QueueEntry {
   startedAt?: string
   completedAt?: string
   priorityAssignedBy?: string
+
+  paymentMethod?: PaymentMethod
+  hospitalFeeAmount?: number
+  platformFeeAmount?: number
+  platformFeeStatus?: FeeStatus
+  hospitalFeeStatus?: FeeStatus
+  verificationCode?: string
 }
 
 export type AppointmentStatus = 'scheduled' | 'converted' | 'cancelled'

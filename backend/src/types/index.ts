@@ -52,6 +52,18 @@ export const QUEUE_TRANSITIONS: Record<QueueStatus, QueueStatus[]> = {
 
 export type DoctorStatus = 'available' | 'delayed' | 'paused' | 'closed'
 
+/** How an online token's two fees get paid — see
+ * docs/VISITNOW_PRODUCT_DECISIONS.md §3 for the full model. Offline and
+ * appointment-sourced entries don't carry a payment method at all (see
+ * QueueEntry below) — a walk-in patient pays the clinic in person the
+ * way they always have, VisitNow's fee never applies to them. */
+export type PaymentMethod = 'ONLINE' | 'PAY_AT_HOSPITAL'
+export type FeeStatus = 'PAID' | 'DUE'
+
+/** Fixed for this prototype — see the product decisions log §3. A real
+ * version of this would live on a pricing/config table, not a constant. */
+export const PLATFORM_FEE_INR = 9
+
 export interface Clinic {
   id: string
   name: string
@@ -96,6 +108,12 @@ export interface Session {
    * a per-session number because a dermatology follow-up and a general
    * physician's first visit genuinely take different amounts of time. */
   avgConsultMinutes: number
+  /** The clinic's own token/consultation fee in INR — set by the clinic,
+   * never by VisitNow, and separate from PLATFORM_FEE_INR. Snapshotted
+   * onto each QueueEntry at creation time (see queueEngine.generateToken)
+   * so a fee change here never retroactively changes what an already-
+   * issued token owes — see decisions log §8, edge case #11. */
+  hospitalFeeAmount: number
 
   doctorStatus: DoctorStatus
   /** Only meaningful when doctorStatus is 'delayed'. */
@@ -134,6 +152,25 @@ export interface QueueEntry {
    * the field exists so the UI can show it and the rule is structurally
    * true even if not access-controlled yet. */
   priorityAssignedBy?: string
+
+  /** Only set for source: 'online' — an offline (walk-in) or converted-
+   * appointment entry never goes through VisitNow's payment step at all,
+   * so these stay undefined for them rather than being forced into a
+   * PAID/DUE state that doesn't mean anything for a walk-in. See
+   * decisions log §3-4: payment fields never influence queue order or
+   * anything in queueEngine.ts's ordering/transition logic — they exist
+   * purely for the patient/receptionist to see. */
+  paymentMethod?: PaymentMethod
+  hospitalFeeAmount?: number
+  platformFeeAmount?: number
+  platformFeeStatus?: FeeStatus
+  hospitalFeeStatus?: FeeStatus
+
+  /** 4-digit, visit-specific — see decisions log §6. A lookup key for a
+   * human at reception, not an authentication credential. Only issued
+   * for source: 'online' (a walk-in patient is already standing in front
+   * of the person who'd otherwise ask for it). */
+  verificationCode?: string
 }
 
 export type AppointmentStatus = 'scheduled' | 'converted' | 'cancelled'

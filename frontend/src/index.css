@@ -1,69 +1,81 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------
-   VisitNow design system — "calm clinical."
+   VisitNow design system — v2, built around the actual VisitNow mark (a
+   glossy blue "V" with a green checkmark). This replaces the earlier
+   "calm clinical" teal/serif system from the first patient-experience
+   pass entirely — this is a deliberate identity change, not a refinement
+   of the old one, per the product brief for this rebuild.
 
-   Deliberately not the default Tailwind blue-on-white SaaS palette: a
-   warm off-white ground (not stark white), a deep muted teal as the one
-   accent color, and an editorial serif for anything that should feel
-   like a statement (a token number, a headline) paired with a warm
-   geometric sans for everything functional. The goal is a page that
-   reads as designed for a healthcare product, not generated for one.
+   Blue carries structure, trust, primary actions. Green is reserved for
+   confirmation and "good" states (paid, available, queue moving) — the
+   same role the checkmark plays in the mark itself, not a generic
+   secondary color used everywhere. Sora for anything that should feel
+   like a headline or a big number (a token, a price); Manrope for
+   everything functional. Two sans faces, not a serif/sans pairing — this
+   product is meant to read as a modern consumer app, not an editorial
+   healthcare brand.
 --------------------------------------------------------------------- */
 
 @theme {
-  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-display: 'Sora', ui-sans-serif, system-ui, sans-serif;
   --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
 
-  --color-brand-50: #eef5f3;
-  --color-brand-100: #d9e9e5;
-  --color-brand-200: #b3d3cb;
-  --color-brand-300: #82b6ab;
-  --color-brand-400: #4f9186;
-  --color-brand-500: #14746f;
-  --color-brand-600: #0f5d5a;
-  --color-brand-700: #0b4644;
-  --color-brand-800: #093836;
-  --color-brand-900: #072a29;
+  --color-brand-50: #eaf1ff;
+  --color-brand-100: #d3e2ff;
+  --color-brand-200: #a8c6ff;
+  --color-brand-300: #74a3fb;
+  --color-brand-400: #4380f5;
+  --color-brand-500: #1c62ec;
+  --color-brand-600: #144cd1;
+  --color-brand-700: #0f3aa6;
+  --color-brand-800: #0c2d80;
+  --color-brand-900: #0a2464;
+
+  --color-accent-50: #e9f9ee;
+  --color-accent-100: #cdf1d9;
+  --color-accent-200: #9ce3b3;
+  --color-accent-300: #66cf88;
+  --color-accent-400: #3cbb66;
+  --color-accent-500: #1fa64d;
+  --color-accent-600: #17873e;
+  --color-accent-700: #126b32;
 }
 
 :root {
-  --color-bg: #faf8f4;
+  --color-bg: #f6f8fc;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
 
-  --color-text: #1c2321;
-  --color-text-muted: #55605b;
-  --color-text-faint: #838d87;
+  --color-text: #101a2e;
+  --color-text-muted: #5a6478;
+  --color-text-faint: #8991a3;
 
-  --color-border: #e6e1d6;
-  --color-border-strong: #d4cdbc;
+  --color-border: #e6eaf3;
+  --color-border-strong: #d2d9e8;
 
-  --color-success: #2f7d5a;
-  --color-success-bg: #e6f2ec;
-  --color-warning: #a3690c;
-  --color-warning-bg: #faf0dc;
-  --color-danger: #b3392a;
-  --color-danger-bg: #fbeae6;
+  --color-success: #17873e;
+  --color-success-bg: #e9f9ee;
+  --color-warning: #b5690b;
+  --color-warning-bg: #fdf1de;
+  --color-danger: #c22b3a;
+  --color-danger-bg: #fdecee;
 
-  /* Queue-source tags — deliberately distinct from the status colors
-     above, since a token's source and its status are unrelated facts
-     that can both be shown on the same row. */
-  --color-source-online: #0f5d5a;
-  --color-source-online-bg: #e3efed;
-  --color-source-offline: #55605b;
-  --color-source-offline-bg: #ecebe6;
-  --color-source-appointment: #3d5a80;
-  --color-source-appointment-bg: #e5eaf1;
+  --color-source-online: #144cd1;
+  --color-source-online-bg: #eaf1ff;
+  --color-source-offline: #5a6478;
+  --color-source-offline-bg: #eef0f5;
+  --color-source-appointment: #7c4fd4;
+  --color-source-appointment-bg: #f2ecfc;
 
   --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1.125rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
   --radius-xl: 1.75rem;
 
-  --shadow-sm: 0 1px 2px rgba(28, 35, 33, 0.06);
-  --shadow-md: 0 6px 20px -4px rgba(28, 35, 33, 0.12);
-  --shadow-lg: 0 20px 45px -12px rgba(28, 35, 33, 0.22);
+  --shadow-sm: 0 1px 2px rgba(16, 26, 46, 0.06);
+  --shadow-md: 0 8px 24px -6px rgba(16, 26, 46, 0.14);
+  --shadow-lg: 0 24px 50px -14px rgba(16, 26, 46, 0.24);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -83,6 +95,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection {
+  background: var(--color-brand-200);
+  color: var(--color-brand-900);
+}
+
 /* Hides the scrollbar on horizontally-scrolling strips (specialty
    chips) without hiding the ability to scroll — the scroll affordance
    there is the partially-cut-off last chip, not a visible scrollbar. */
@@ -92,11 +109,6 @@ body {
 }
 .scrollbar-none::-webkit-scrollbar {
   display: none;
-}
-
-::selection {
-  background: var(--color-brand-200);
-  color: var(--color-brand-900);
 }
 
 @keyframes rise-in {
@@ -140,4 +152,27 @@ body {
 }
 .animate-toast-in {
   animation: toast-in 0.25s var(--ease-out);
+}
+
+@keyframes splash-mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-splash-mark {
+  animation: splash-mark-in 0.5s var(--ease-out);
+}
+
+@keyframes progress-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
 }

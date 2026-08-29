@@ -1,4 +1,4 @@
-import { ApiError, type Appointment, type Clinic, type Doctor, type QueueEntry, type QueuePriority, type QueueSource, type Session, type SessionWithRelations } from './types'
+import { ApiError, type Appointment, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type QueuePriority, type QueueSource, type Session, type SessionWithRelations } from './types'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') ?? ''
 
@@ -49,14 +49,14 @@ export function fetchQueue(sessionId: string): Promise<{ entries: QueueEntry[] }
 
 export function generateToken(
   sessionId: string,
-  input: { source: QueueSource; patientName: string; patientPhone?: string },
+  input: { source: QueueSource; patientName: string; patientPhone?: string; paymentMethod?: PaymentMethod },
 ): Promise<{ entry: QueueEntry }> {
   return request(`/api/sessions/${sessionId}/token`, { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function fetchQueueEntry(
   entryId: string,
-): Promise<{ entry: QueueEntry; session: Session; patientsAhead: number; estimatedMinutes: number }> {
+): Promise<{ entry: QueueEntry; session: Session; doctor: Doctor; clinic: Clinic; patientsAhead: number; estimatedMinutes: number }> {
   return request(`/api/queue-entries/${entryId}`)
 }
 
