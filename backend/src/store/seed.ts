@@ -16,6 +16,19 @@ import { clinics, doctors, nextId, queueEntries, sessions } from './store.js'
 
 const today = new Date().toISOString().slice(0, 10)
 
+/** Placeholder photography — verified live (both services return real
+ * images, not broken links) rather than guessed. `u=<slug>` / `seed=
+ * <slug>` deterministically map a string to one image, so the same
+ * doctor/clinic always gets the same photo across restarts without
+ * storing binary data anywhere. Swapping in real photos later is a
+ * one-line change per entity, not a shape change (see types/index.ts). */
+function doctorPhoto(slug: string): string {
+  return `https://i.pravatar.cc/300?u=${slug}`
+}
+function clinicPhoto(slug: string): string {
+  return `https://picsum.photos/seed/${slug}/800/500`
+}
+
 function addClinic(c: Omit<Clinic, 'id'>): Clinic {
   const clinic: Clinic = { id: nextId('clinic'), ...c }
   clinics.set(clinic.id, clinic)
@@ -47,15 +60,55 @@ function addEntry(e: Omit<QueueEntry, 'id' | 'createdAt'> & { createdAt?: string
 }
 
 export function seedDemoData(): void {
-  const sunrise = addClinic({ name: 'Sunrise Multispecialty Clinic', location: 'Banjara Hills Road No. 12', city: 'Hyderabad' })
-  const cityCare = addClinic({ name: 'City Care Hospital', location: 'MG Road', city: 'Hyderabad' })
-  const greenValley = addClinic({ name: 'Green Valley Clinic', location: 'Kondapur Main Road', city: 'Hyderabad' })
+  const sunrise = addClinic({
+    name: 'Sunrise Multispecialty Clinic',
+    location: 'Banjara Hills Road No. 12',
+    city: 'Hyderabad',
+    photoUrl: clinicPhoto('sunrise-multispecialty-clinic'),
+  })
+  const cityCare = addClinic({
+    name: 'City Care Hospital',
+    location: 'MG Road',
+    city: 'Hyderabad',
+    photoUrl: clinicPhoto('city-care-hospital'),
+  })
+  const greenValley = addClinic({
+    name: 'Green Valley Clinic',
+    location: 'Kondapur Main Road',
+    city: 'Hyderabad',
+    photoUrl: clinicPhoto('green-valley-clinic'),
+  })
 
-  const drKumar = addDoctor({ name: 'Dr. Ashwin Kumar', specialty: 'General Physician', qualifications: 'MBBS, MD (General Medicine)' })
-  const drRao = addDoctor({ name: 'Dr. Priya Rao', specialty: 'Dermatologist', qualifications: 'MBBS, MD (Dermatology)' })
-  const drIyer = addDoctor({ name: 'Dr. Meera Iyer', specialty: 'Pediatrician', qualifications: 'MBBS, DCH' })
-  const drNaidu = addDoctor({ name: 'Dr. Suresh Naidu', specialty: 'Orthopedic Surgeon', qualifications: 'MBBS, MS (Ortho)' })
-  const drFernandes = addDoctor({ name: 'Dr. Alisha Fernandes', specialty: 'ENT Specialist', qualifications: 'MBBS, MS (ENT)' })
+  const drKumar = addDoctor({
+    name: 'Dr. Ashwin Kumar',
+    specialty: 'General Physician',
+    qualifications: 'MBBS, MD (General Medicine)',
+    photoUrl: doctorPhoto('dr-ashwin-kumar'),
+  })
+  const drRao = addDoctor({
+    name: 'Dr. Priya Rao',
+    specialty: 'Dermatologist',
+    qualifications: 'MBBS, MD (Dermatology)',
+    photoUrl: doctorPhoto('dr-priya-rao'),
+  })
+  const drIyer = addDoctor({
+    name: 'Dr. Meera Iyer',
+    specialty: 'Pediatrician',
+    qualifications: 'MBBS, DCH',
+    photoUrl: doctorPhoto('dr-meera-iyer'),
+  })
+  const drNaidu = addDoctor({
+    name: 'Dr. Suresh Naidu',
+    specialty: 'Orthopedic Surgeon',
+    qualifications: 'MBBS, MS (Ortho)',
+    photoUrl: doctorPhoto('dr-suresh-naidu'),
+  })
+  const drFernandes = addDoctor({
+    name: 'Dr. Alisha Fernandes',
+    specialty: 'ENT Specialist',
+    qualifications: 'MBBS, MS (ENT)',
+    photoUrl: doctorPhoto('dr-alisha-fernandes'),
+  })
 
   // --- The "live" demo session: Dr. Kumar's morning slot at Sunrise ------
   // Mid-session: tokens 1-16 already handled, 17 in progress, a handful

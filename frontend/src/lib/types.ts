@@ -15,6 +15,7 @@ export interface Clinic {
   name: string
   location: string
   city: string
+  photoUrl?: string
 }
 
 export interface Doctor {

@@ -1,4 +1,6 @@
-import { Link, Outlet } from 'react-router-dom'
+import { LogOut } from 'lucide-react'
+import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { staffLogout } from '../../lib/staffAuth'
 
 /**
  * The hospital/staff shell — a working console, not a calm reading
@@ -9,6 +11,8 @@ import { Link, Outlet } from 'react-router-dom'
  * point (brief §16: "completely different from the hospital panel").
  */
 export function StaffLayout() {
+  const navigate = useNavigate()
+
   return (
     <div className="flex min-h-screen flex-col bg-[#F4F2EC]">
       <header className="bg-[var(--color-brand-800)]">
@@ -19,9 +23,16 @@ export function StaffLayout() {
               Staff console
             </span>
           </Link>
-          <Link to="/" className="text-xs font-semibold text-white/60 transition-colors hover:text-white">
-            ← Patient view
-          </Link>
+          <button
+            onClick={() => {
+              staffLogout()
+              navigate('/staff/login', { replace: true })
+            }}
+            className="flex items-center gap-1.5 text-xs font-semibold text-white/60 transition-colors hover:text-white"
+          >
+            <LogOut size={13} aria-hidden="true" />
+            Sign out
+          </button>
         </div>
       </header>
 

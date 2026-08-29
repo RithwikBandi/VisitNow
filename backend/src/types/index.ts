@@ -58,6 +58,9 @@ export interface Clinic {
   /** Free-text is enough for a demo — no geocoding/maps in this phase. */
   location: string
   city: string
+  /** Placeholder photography in demo data (see seed.ts) — swapping in a
+   * real clinic's actual photo later is a seed-data change only. */
+  photoUrl?: string
 }
 
 export interface Doctor {
@@ -65,8 +68,8 @@ export interface Doctor {
   name: string
   specialty: string
   qualifications: string
-  /** Data URL or public image path — the frontend data layer can swap
-   * demo photos for real ones without any shape change. */
+  /** Placeholder headshots in demo data (see seed.ts) — same swap-later
+   * story as Clinic.photoUrl. */
   photoUrl?: string
 }
 

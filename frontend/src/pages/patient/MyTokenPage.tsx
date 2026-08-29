@@ -28,7 +28,7 @@ export function MyTokenPage() {
   const youAreNext = entry.status === 'waiting' && patientsAhead === 0
 
   return (
-    <div className="animate-rise-in flex flex-col gap-6 pt-4">
+    <div className="animate-rise-in mx-auto flex max-w-lg flex-col gap-6 pt-4">
       <div className="text-center">
         <p className="text-sm text-[var(--color-text-muted)]">
           Token for {session.label} · {session.startTime}–{session.endTime}

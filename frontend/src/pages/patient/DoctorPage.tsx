@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { SessionCard } from '../../components/patient/SessionCard'
+import { DoctorCard } from '../../components/patient/DoctorCard'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { fetchDoctor } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
@@ -11,7 +11,7 @@ export function DoctorPage() {
   const { data, loading, error } = usePolling(fetcher, 15_000)
 
   if (loading && !data) {
-    return <div className="mt-8 h-40 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />
+    return <div className="mx-auto mt-8 h-40 max-w-2xl animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />
   }
   if (error && !data) return <ErrorState message={error} />
   if (!data) return null
@@ -20,11 +20,18 @@ export function DoctorPage() {
   const today = sessions.filter((s) => s.doctorStatus !== 'closed' || s.isQueueOpen)
 
   return (
-    <div className="animate-rise-in flex flex-col gap-8 pt-4">
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-[var(--color-text)]">{doctor.name}</h1>
-        <p className="mt-1.5 text-sm text-[var(--color-text-muted)]">{doctor.qualifications}</p>
+    <div className="animate-rise-in mx-auto flex max-w-2xl flex-col gap-8 pt-4">
+      <div className="flex items-center gap-4">
+        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-[var(--color-border)] shadow-[var(--shadow-sm)] sm:h-24 sm:w-24">
+          {doctor.photoUrl && <img src={doctor.photoUrl} alt="" className="h-full w-full object-cover" />}
+        </div>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
+          <h1 className="mt-0.5 font-display text-2xl font-semibold tracking-tight text-[var(--color-text)] sm:text-3xl">
+            {doctor.name}
+          </h1>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">{doctor.qualifications}</p>
+        </div>
       </div>
 
       <div>
@@ -34,9 +41,9 @@ export function DoctorPage() {
         {sessions.length === 0 ? (
           <p className="text-sm text-[var(--color-text-faint)]">No sessions scheduled today.</p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {sessions.map((s) => (
-              <SessionCard key={s.id} session={s} />
+              <DoctorCard key={s.id} session={s} />
             ))}
           </div>
         )}

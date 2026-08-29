@@ -83,6 +83,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Hides the scrollbar on horizontally-scrolling strips (specialty
+   chips) without hiding the ability to scroll — the scroll affordance
+   there is the partially-cut-off last chip, not a visible scrollbar. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 ::selection {
   background: var(--color-brand-200);
   color: var(--color-brand-900);

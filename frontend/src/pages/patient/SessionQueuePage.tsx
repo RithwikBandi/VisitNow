@@ -49,15 +49,33 @@ export function SessionQueuePage() {
   }
 
   return (
-    <div className="animate-rise-in flex flex-col gap-8 pt-4">
+    <div className="animate-rise-in mx-auto flex max-w-2xl flex-col gap-8 pt-4">
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-[var(--color-text)]">{doctor.name}</h1>
-        <p className="mt-1.5 text-sm text-[var(--color-text-muted)]">
-          {clinic.name}, {clinic.location} · {session.label} · {session.startTime}–{session.endTime}
-        </p>
-        <div className="mt-3">
-          <DoctorStatusLine status={session.doctorStatus} delayMinutes={session.delayMinutes} />
+        <div className="relative h-36 w-full overflow-hidden rounded-[var(--radius-xl)] bg-[var(--color-border)] sm:h-48">
+          {clinic.photoUrl && <img src={clinic.photoUrl} alt="" className="h-full w-full object-cover" />}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-transparent" />
+          <p className="absolute bottom-3 left-4 text-[13px] font-semibold text-white">
+            {clinic.name} · {clinic.location}
+          </p>
+        </div>
+
+        <div className="-mt-9 flex items-end gap-3.5 px-3 sm:-mt-11">
+          <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full border-[3px] border-[var(--color-bg)] bg-[var(--color-border)] shadow-[var(--shadow-sm)] sm:h-[88px] sm:w-[88px]">
+            {doctor.photoUrl && <img src={doctor.photoUrl} alt="" className="h-full w-full object-cover" />}
+          </div>
+          <div className="pb-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--color-text)] sm:text-3xl">{doctor.name}</h1>
+          </div>
+        </div>
+
+        <div className="mt-3 px-1">
+          <p className="text-sm text-[var(--color-text-muted)]">
+            {session.label} · {session.startTime}–{session.endTime}
+          </p>
+          <div className="mt-2">
+            <DoctorStatusLine status={session.doctorStatus} delayMinutes={session.delayMinutes} />
+          </div>
         </div>
       </div>
 
