@@ -1,15 +1,19 @@
 import { Check, Landmark, LocateFixed, Loader2, MapPin, Search, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-/** Demo cities only — every clinic in the seed data is in Hyderabad, so
- * changing this doesn't actually filter anything yet (see
- * docs/VISITNOW_PRODUCT_DECISIONS.md §12/Open questions). It exists so
- * the "location first" product idea is visibly present and the
- * interaction is real, not a visual afterthought. */
-const CITIES = ['Hyderabad', 'Bengaluru', 'Mumbai', 'Delhi-NCR', 'Chennai', 'Pune', 'Kolkata', 'Ahmedabad'] as const
+/** Demo cities. The seed data actually has clinics in Hyderabad, Warangal,
+ * and Bengaluru — every other city here is a real, selectable choice that
+ * honestly shows "VisitNow hasn't launched here yet" rather than pretending
+ * to have coverage (see docs/VISITNOW_PRODUCT_DECISIONS.md §12/§14). */
+const CITIES = ['Hyderabad', 'Warangal', 'Bengaluru', 'Mumbai', 'Delhi-NCR', 'Chennai', 'Pune', 'Kolkata', 'Ahmedabad'] as const
+
+/** Cities the demo data actually has clinics in, for pages that need to
+ * fall back gracefully when the picked city has no coverage yet. */
+export const LAUNCHED_CITIES = ['Hyderabad', 'Warangal', 'Bengaluru'] as const
 
 const KEY = 'visitnow:location'
+const CHANGE_EVENT = 'visitnow:location-change'
 
 export function getSavedLocation(): string {
   try {
@@ -17,6 +21,21 @@ export function getSavedLocation(): string {
   } catch {
     return 'Hyderabad'
   }
+}
+
+/** Home and the clinics list both need to react when the header's
+ * LocationBar changes city, even though they're siblings under AppShell's
+ * <Outlet/> with no shared parent state. A same-tab CustomEvent is the
+ * lightest thing that works here — localStorage's own "storage" event
+ * deliberately never fires in the tab that made the write. */
+export function useSelectedCity(): string {
+  const [city, setCity] = useState(getSavedLocation)
+  useEffect(() => {
+    const onChange = (e: Event) => setCity((e as CustomEvent<string>).detail)
+    window.addEventListener(CHANGE_EVENT, onChange)
+    return () => window.removeEventListener(CHANGE_EVENT, onChange)
+  }, [])
+  return city
 }
 
 type DetectState = 'idle' | 'detecting' | 'error'
@@ -40,6 +59,7 @@ export function LocationBar({ onChange, compact = false }: { onChange?: (city: s
     } catch {
       // Non-fatal — the UI still updates for this session.
     }
+    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: c }))
     onChange?.(c)
     setOpen(false)
     setQuery('')

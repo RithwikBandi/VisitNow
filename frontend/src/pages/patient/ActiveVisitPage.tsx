@@ -1,11 +1,12 @@
-import { CheckCircle2, Circle, Clock } from 'lucide-react'
-import { useCallback } from 'react'
+import { CheckCircle2, Circle, Clock, XCircle } from 'lucide-react'
+import { useCallback, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Badge, DoctorStatusLine } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { fetchQueueEntry } from '../../lib/api'
+import { cancelEntry, fetchQueueEntry } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
-import type { QueueStatus } from '../../lib/types'
+import { ApiError, type QueueStatus } from '../../lib/types'
 
 /** The most important patient screen in the product (brief §15) — a
  * patient will have this open, minimized, and reopened many times while
@@ -17,7 +18,10 @@ const POLL_MS = 3_000
 export function ActiveVisitPage() {
   const { entryId } = useParams<{ entryId: string }>()
   const fetcher = useCallback(() => fetchQueueEntry(entryId!), [entryId])
-  const { data, loading, error } = usePolling(fetcher, POLL_MS, entryId)
+  const { data, loading, error, refresh } = usePolling(fetcher, POLL_MS, entryId)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   if (loading && !data) {
     return <div className="mt-6 h-[32rem] animate-pulse rounded-[var(--radius-xl)] bg-[var(--color-border)]/40" />
@@ -27,6 +31,25 @@ export function ActiveVisitPage() {
 
   const { entry, session, doctor, clinic, patientsAhead, estimatedMinutes } = data
   const youAreNext = entry.status === 'waiting' && patientsAhead === 0
+  // Only a still-waiting token can be cancelled — once staff has called
+  // it, the queue engine no longer allows that transition (a no-show is
+  // the staff-side equivalent at that point, not a patient cancellation;
+  // see backend QUEUE_TRANSITIONS).
+  const canCancel = entry.status === 'waiting'
+
+  const confirmCancel = async () => {
+    setCancelling(true)
+    setCancelError(null)
+    try {
+      await cancelEntry(entry.id)
+      setConfirmingCancel(false)
+      refresh()
+    } catch (err) {
+      setCancelError(err instanceof ApiError ? err.message : 'Could not cancel this visit. Please try again.')
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   return (
     <div className="animate-rise-in mx-auto flex max-w-xl flex-col gap-5">
@@ -86,6 +109,34 @@ export function ActiveVisitPage() {
               {entry.hospitalFeeStatus === 'PAID' ? 'Paid' : 'Pay at hospital'}
             </Badge>
           </div>
+        </div>
+      )}
+
+      {canCancel && (
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          {!confirmingCancel ? (
+            <button
+              onClick={() => setConfirmingCancel(true)}
+              className="flex w-full items-center justify-center gap-1.5 text-sm font-bold text-[var(--color-danger)] transition-colors hover:text-[var(--color-danger)]/80"
+            >
+              <XCircle size={15} aria-hidden="true" />
+              Cancel this visit
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="text-center text-sm font-semibold text-[var(--color-text)]">Cancel token #{entry.tokenNumber}?</p>
+              <p className="text-center text-xs text-[var(--color-text-muted)]">This can't be undone — you'll lose your place in the queue.</p>
+              {cancelError && <p className="text-center text-xs text-[var(--color-danger)]">{cancelError}</p>}
+              <div className="mt-1 flex gap-2">
+                <Button variant="secondary" size="sm" className="flex-1" onClick={() => setConfirmingCancel(false)} disabled={cancelling}>
+                  Keep my token
+                </Button>
+                <Button variant="danger" size="sm" className="flex-1" onClick={confirmCancel} disabled={cancelling}>
+                  {cancelling ? 'Cancelling…' : 'Yes, cancel'}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

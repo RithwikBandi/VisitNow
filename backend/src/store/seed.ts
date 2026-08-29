@@ -14,7 +14,8 @@
 import { PLATFORM_FEE_INR, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type Session } from '../types/index.js'
 import { clinics, doctors, nextId, queueEntries, sessions } from './store.js'
 
-const today = new Date().toISOString().slice(0, 10)
+const NOW = new Date()
+const today = NOW.toISOString().slice(0, 10)
 
 /** `offset` in days from today — used to seed a couple of upcoming dates
  * for a session so the date-selector on SessionDetailPage has more than
@@ -23,6 +24,24 @@ function dateOffset(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() + days)
   return d.toISOString().slice(0, 10)
+}
+
+/** "HH:MM" offset from server-start time, not a fixed clock time — used
+ * only for sessions seeded `isQueueOpen: true` ("live" right now) and
+ * their same-doctor "later today" sibling session. Every other session
+ * below uses a plain fixed time because nothing compares it to the real
+ * clock; these specific ones are the exception because the frontend's
+ * sessionTiming() (lib/sessions.ts) *does* compare a multi-clinic
+ * doctor's sessions against real now() to badge "Here now" / "Later
+ * today" (Dr. Suman's actual clinic-A-morning/clinic-B-evening
+ * schedule). A fixed "08:00-12:00" would eventually just be in the past
+ * whenever someone actually opens the demo, contradicting a card still
+ * saying "Serving #17" — this makes the seed correct at any hour,
+ * which matters for a demo that gets shown to investors on no fixed
+ * schedule. */
+function relTime(offsetHours: number): string {
+  const d = new Date(NOW.getTime() + offsetHours * 60 * 60 * 1000)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 /** Placeholder photography — verified live (both services return real
@@ -144,8 +163,8 @@ export function seedDemoData(): void {
     doctorId: drKumar.id,
     clinicId: sunrise.id,
     label: 'Morning Session',
-    startTime: '08:00',
-    endTime: '12:00',
+    startTime: relTime(-2),
+    endTime: relTime(2),
     avgConsultMinutes: 6,
     hospitalFeeAmount: 500,
     doctorStatus: 'available',
@@ -260,8 +279,8 @@ export function seedDemoData(): void {
     doctorId: drKumar.id,
     clinicId: cityCare.id,
     label: 'Evening Session',
-    startTime: '17:00',
-    endTime: '21:00',
+    startTime: relTime(5),
+    endTime: relTime(9),
     avgConsultMinutes: 6,
     hospitalFeeAmount: 550,
     doctorStatus: 'available',
@@ -388,8 +407,8 @@ export function seedDemoData(): void {
     doctorId: drReddy.id,
     clinicId: metroDiagnostics.id,
     label: 'Morning Session',
-    startTime: '09:00',
-    endTime: '13:00',
+    startTime: relTime(-2),
+    endTime: relTime(2),
     avgConsultMinutes: 10,
     hospitalFeeAmount: 800,
     doctorStatus: 'available',
@@ -469,10 +488,161 @@ export function seedDemoData(): void {
     doctorId: drReddy.id,
     clinicId: lakeview.id,
     label: 'Evening Session',
-    startTime: '17:00',
-    endTime: '20:00',
+    startTime: relTime(5),
+    endTime: relTime(8),
     avgConsultMinutes: 10,
     hospitalFeeAmount: 800,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+
+  // --- Warangal / Hanamkonda — requested explicitly to demonstrate the
+  // product outside Hyderabad. Names and clinics here are plainly
+  // fictional (see docs/VISITNOW_PRODUCT_DECISIONS.md §12/§13): no real
+  // clinic's name, phone number, or photo is reproduced, even though
+  // the "one doctor, two clinics, morning + evening" shape is modeled
+  // on a real local example. Street names (Nakkalagutta, Mulugu Road,
+  // Kakatiya Nagar, Subedari) are genuine Hanamkonda-area localities —
+  // that's public geography, not anyone's personal data — used so the
+  // location reads as authentic rather than generic.
+  const kakatiyaClinic = addClinic({
+    name: 'Kakatiya General Clinic',
+    location: 'Nakkalagutta Main Road',
+    city: 'Warangal',
+    photoUrl: clinicPhoto('kakatiya-general-clinic'),
+  })
+  const subedariClinic = addClinic({
+    name: 'Subedari Family Care Centre',
+    location: 'Subedari Road, Hanamkonda',
+    city: 'Warangal',
+    photoUrl: clinicPhoto('subedari-family-care'),
+  })
+
+  const drSuman = addDoctor({
+    name: 'Dr. Suman Vaddepally',
+    specialty: 'General Physician',
+    qualifications: 'MBBS, MD (General Medicine)',
+    photoUrl: doctorPhoto('dr-suman-vaddepally'),
+  })
+  const drAnjali = addDoctor({
+    name: 'Dr. Anjali Nimmagadda',
+    specialty: 'Pediatrician',
+    qualifications: 'MBBS, DCH',
+    photoUrl: doctorPhoto('dr-anjali-nimmagadda'),
+  })
+
+  // The exact "clinic A morning, clinic B evening" shape from the real
+  // example this is modeled on.
+  const sumanMorning = addSession({
+    doctorId: drSuman.id,
+    clinicId: kakatiyaClinic.id,
+    label: 'Morning Session',
+    startTime: relTime(-2),
+    endTime: relTime(2),
+    avgConsultMinutes: 8,
+    hospitalFeeAmount: 300,
+    doctorStatus: 'available',
+    isQueueOpen: true,
+    nextTokenNumber: 12,
+    currentToken: 8,
+  })
+  for (let t = 1; t <= 7; t++) {
+    addEntry({
+      sessionId: sumanMorning.id,
+      tokenNumber: t,
+      source: t % 3 === 0 ? 'offline' : 'online',
+      priority: 'regular',
+      status: 'completed',
+      patientName: DEMO_NAMES[(t + 3) % DEMO_NAMES.length],
+      completedAt: new Date(Date.now() - (8 - t) * 8 * 60_000).toISOString(),
+    })
+  }
+  addEntry({
+    sessionId: sumanMorning.id,
+    tokenNumber: 8,
+    source: 'offline',
+    priority: 'regular',
+    status: 'in_progress',
+    patientName: 'Sandhya Reddy',
+    calledAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+    startedAt: new Date(Date.now() - 2 * 60_000).toISOString(),
+  })
+  addEntry({ sessionId: sumanMorning.id, tokenNumber: 9, source: 'online', priority: 'regular', status: 'waiting', patientName: 'Rakesh Bommidi' })
+  addEntry({ sessionId: sumanMorning.id, tokenNumber: 10, source: 'offline', priority: 'regular', status: 'waiting', patientName: 'Neha Kapoor' })
+  addEntry({
+    sessionId: sumanMorning.id,
+    tokenNumber: 11,
+    source: 'online',
+    priority: 'regular',
+    status: 'waiting',
+    patientName: 'Vikram Shetty',
+    ...onlinePayment('PAY_AT_HOSPITAL', 300, '1837'),
+  })
+  addSession({
+    doctorId: drSuman.id,
+    clinicId: subedariClinic.id,
+    label: 'Evening Session',
+    startTime: relTime(5),
+    endTime: relTime(9),
+    avgConsultMinutes: 8,
+    hospitalFeeAmount: 300,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drAnjali.id,
+    clinicId: kakatiyaClinic.id,
+    label: 'Morning Session',
+    startTime: '10:00',
+    endTime: '13:00',
+    avgConsultMinutes: 10,
+    hospitalFeeAmount: 350,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+
+  // --- Bengaluru — the location list offered a city with zero actual
+  // data in it, which made "choose your location" a decoration rather
+  // than something with a real effect once city filtering exists.
+  const koramangalaClinic = addClinic({
+    name: 'Koramangala Wellness Clinic',
+    location: '80 Feet Road, Koramangala',
+    city: 'Bengaluru',
+    photoUrl: clinicPhoto('koramangala-wellness-clinic'),
+  })
+
+  const drIyer2 = addDoctor({
+    name: 'Dr. Nandini Iyer',
+    specialty: 'Dermatologist',
+    qualifications: 'MBBS, MD (Dermatology)',
+    photoUrl: doctorPhoto('dr-nandini-iyer'),
+  })
+  const drRaghavan = addDoctor({
+    name: 'Dr. Karthik Raghavan',
+    specialty: 'Orthopedic Surgeon',
+    qualifications: 'MBBS, MS (Ortho)',
+    photoUrl: doctorPhoto('dr-karthik-raghavan'),
+  })
+
+  addSession({
+    doctorId: drIyer2.id,
+    clinicId: koramangalaClinic.id,
+    label: 'Morning Session',
+    startTime: '09:30',
+    endTime: '13:00',
+    avgConsultMinutes: 9,
+    hospitalFeeAmount: 550,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drRaghavan.id,
+    clinicId: koramangalaClinic.id,
+    label: 'Evening Session',
+    startTime: '17:00',
+    endTime: '20:00',
+    avgConsultMinutes: 14,
+    hospitalFeeAmount: 700,
     doctorStatus: 'available',
     isQueueOpen: false,
   })

@@ -58,6 +58,23 @@ export function ClinicDetailPage() {
       )}
 
       <div>
+        <h2 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Location</h2>
+        <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)]">
+          <iframe
+            title={`Map showing ${clinic.location}, ${clinic.city}`}
+            src={`https://www.google.com/maps?q=${encodeURIComponent(`${clinic.location}, ${clinic.city}`)}&output=embed`}
+            loading="lazy"
+            className="h-56 w-full border-0 sm:h-72"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        </div>
+        <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-[var(--color-text-faint)]">
+          <MapPin size={12} aria-hidden="true" />
+          {clinic.location}, {clinic.city}
+        </p>
+      </div>
+
+      <div>
         <h2 className="mb-3 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">
           Doctors at this clinic ({sessions.length})
         </h2>

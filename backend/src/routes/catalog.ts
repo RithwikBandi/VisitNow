@@ -34,7 +34,7 @@ catalogRouter.get('/doctors', (req, res) => {
 catalogRouter.get('/doctors/:id', (req, res) => {
   const doctor = doctors.get(req.params.id)
   if (!doctor) return res.status(404).json({ error: 'No such doctor.' })
-  const doctorSessions = sessionsForDoctor(doctor.id).map((s) => ({ ...s, clinic: clinics.get(s.clinicId) }))
+  const doctorSessions = sessionsForDoctor(doctor.id).map((s) => ({ ...s, doctor, clinic: clinics.get(s.clinicId) }))
   res.json({ doctor, sessions: doctorSessions })
 })
 

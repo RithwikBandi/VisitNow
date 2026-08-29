@@ -8,6 +8,7 @@ import { fetchClinics, fetchQueueEntry, fetchTodaysSessions } from '../../lib/ap
 import { usePolling } from '../../hooks/usePolling'
 import { getPatientIdentity } from '../../lib/patientIdentity'
 import { getMyVisitIds } from '../../lib/myVisits'
+import { useSelectedCity } from './LocationPicker'
 import type { QueueEntry, SessionWithRelations } from '../../lib/types'
 
 type SortMode = 'available' | 'alphabetical'
@@ -62,8 +63,11 @@ export function HomePage() {
   const [sort, setSort] = useState<SortMode>('available')
   const identity = getPatientIdentity()
   const activeVisit = useActiveVisitBanner()
+  const city = useSelectedCity()
 
-  const sessions = data?.sessions ?? []
+  const allSessions = data?.sessions ?? []
+  const sessions = useMemo(() => allSessions.filter((s) => s.clinic.city === city), [allSessions, city])
+  const cityClinics = useMemo(() => (clinicsData?.clinics ?? []).filter((c) => c.city === city), [clinicsData, city])
   const specialties = useMemo(() => [...new Set(sessions.map((s) => s.doctor.specialty))].sort(), [sessions])
 
   const filtered = useMemo(() => {
@@ -125,22 +129,31 @@ export function HomePage() {
         />
       </label>
 
-      {clinicsData && clinicsData.clinics.length > 0 && (
+      {cityClinics.length > 0 && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Clinics near you</h2>
+            <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Clinics in {city}</h2>
             <Link to="/clinics" className="text-[13px] font-bold text-[var(--color-brand-600)] hover:text-[var(--color-brand-700)]">
               View all
             </Link>
           </div>
           <div className="scrollbar-none -mx-4 flex gap-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
-            {clinicsData.clinics.map((clinic) => (
+            {cityClinics.map((clinic) => (
               <div key={clinic.id} className="w-64 shrink-0">
                 <ClinicCard clinic={clinic} />
               </div>
             ))}
           </div>
         </section>
+      )}
+
+      {clinicsData && cityClinics.length === 0 && (
+        <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface)] px-5 py-6 text-center">
+          <p className="text-sm font-semibold text-[var(--color-text)]">VisitNow hasn't launched in {city} yet</p>
+          <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+            We're live in Hyderabad, Warangal, and Bengaluru today — change your location above to browse those.
+          </p>
+        </div>
       )}
 
       <SpecialtyFilter specialties={specialties} active={specialty} onChange={setSpecialty} />
@@ -191,7 +204,7 @@ export function HomePage() {
         </section>
       )}
 
-      {data && filtered.length === 0 && (
+      {data && filtered.length === 0 && sessions.length > 0 && (
         <p className="py-10 text-center text-sm text-[var(--color-text-faint)]">
           {query ? `No doctors match "${query}" today.` : 'No sessions found for this specialty today.'}
         </p>

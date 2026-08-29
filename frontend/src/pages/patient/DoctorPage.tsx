@@ -1,4 +1,4 @@
-import { Building2 } from 'lucide-react'
+import { Building2, Clock } from 'lucide-react'
 import { useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { BackLink } from '../../components/patient/BackLink'
@@ -6,7 +6,8 @@ import { DoctorCard } from '../../components/patient/DoctorCard'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { fetchDoctor } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
-import { dedupeByDoctorClinicSlot } from '../../lib/sessions'
+import { dedupeByDoctorClinicSlot, futureDateLabel, sessionTiming } from '../../lib/sessions'
+import type { SessionWithRelations } from '../../lib/types'
 
 export function DoctorPage() {
   const { doctorId } = useParams<{ doctorId: string }>()
@@ -55,7 +56,10 @@ export function DoctorPage() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {sessions.map((s) => (
-              <DoctorCard key={s.id} session={s} />
+              <div key={s.id} className="flex flex-col gap-1.5">
+                {clinicCount > 1 && <TimingBadge session={s} />}
+                <DoctorCard session={s} />
+              </div>
             ))}
           </div>
         )}
@@ -63,10 +67,51 @@ export function DoctorPage() {
 
       {clinicCount > 1 && (
         <p className="rounded-[var(--radius-md)] bg-[var(--color-brand-50)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-brand-700)]">
-          {doctor.name} sees patients at more than one clinic today — each session runs its own independent queue,
-          so pick the one you actually want to join.
+          {doctor.name} sees patients at more than one clinic today — each session runs its own independent queue.
+          Look for "Here now" to see which clinic they're currently at, or pick an upcoming session instead.
         </p>
       )}
     </div>
   )
+}
+
+/** A purely clock-driven "which clinic is the doctor at right now" badge
+ * — see lib/sessions.ts's sessionTiming for why this is deliberately
+ * separate from the staff-controlled isQueueOpen/doctorStatus signal
+ * DoctorCard already shows. */
+function TimingBadge({ session }: { session: SessionWithRelations }) {
+  const timing = sessionTiming(session)
+
+  if (timing === 'now') {
+    return (
+      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--color-accent-100)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-accent-700)]">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-accent-500)]" aria-hidden="true" />
+        Here now
+      </span>
+    )
+  }
+  if (timing === 'later-today') {
+    return (
+      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--color-border)]/60 px-2.5 py-1 text-[11px] font-bold text-[var(--color-text-muted)]">
+        <Clock size={11} aria-hidden="true" />
+        Later today · {session.startTime}
+      </span>
+    )
+  }
+  if (timing === 'earlier-today') {
+    return (
+      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--color-border)]/60 px-2.5 py-1 text-[11px] font-bold text-[var(--color-text-faint)]">
+        Session ended
+      </span>
+    )
+  }
+  if (timing === 'future') {
+    return (
+      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--color-border)]/60 px-2.5 py-1 text-[11px] font-bold text-[var(--color-text-muted)]">
+        <Clock size={11} aria-hidden="true" />
+        {futureDateLabel(session.date)}
+      </span>
+    )
+  }
+  return null
 }

@@ -361,17 +361,122 @@ discovery grid; 5 clinics/9 doctors across 9 specialties, 3 simultaneously "live
 closer to what an actual local multi-specialty listing looks like. Same fictional-but-plausible
 naming convention as the original seed data (§21 in the original brief).
 
-## 13. Open questions (unresolved, flagged for a future decision)
+## 14. Cancel Visit, real-geography demo data, and a wall-clock consistency bug
+
+Follow-up feedback after §12: patients had no way to cancel a token; the demo needed to cover a
+city outside Hyderabad (explicitly to show investors); the favicon didn't match the real brand
+mark; the site still felt sparse.
+
+**Cancel Visit.** Added to `ActiveVisitPage` — a plain inline confirm (no modal), gated by
+`entry.status === 'waiting'`, matching the backend's own `QUEUE_TRANSITIONS` (once staff has called
+a token, `cancelEntry` no longer accepts a `waiting → cancelled` transition from that state; a
+no-show is the staff-side equivalent at that point). Calls the existing `cancelEntry` API — no new
+backend surface needed, it already supported this transition; the frontend simply never exposed it.
+
+**Real-world grounding without real people.** Asked to "web-scrape" a real family doctor's name,
+clinic names, phone number, and photo (Hanamkonda, Warangal) into the demo data. Declined the
+identifiable-data part specifically and explained why, rather than the whole request: reproducing a
+real doctor's name/clinic/phone as VisitNow demo data would imply a partnership that doesn't exist
+— directly against this project's own §21 naming rule — and a real phone number sitting in demo
+data risks a confused person actually calling it. Built the requested "Suman, two clinics, morning
++ evening" *shape* with a fictional name (`Dr. Suman Vaddepally`) and fictional clinic names
+(`Kakatiya General Clinic`, `Subedari Family Care Centre`), but kept the real, public, non-personal
+part of the ask — genuine Hanamkonda-area street names (Nakkalagutta, Subedari, Kaloji) — so the
+location still reads as authentic. Same treatment for 2 new Bengaluru doctors/1 clinic. Same
+pravatar/picsum placeholder photo convention as the rest of the seed data, not a scraped photo of
+a real person.
+
+**City selection now actually filters.** Previously cosmetic (§12's open question) — `LocationBar`
+had no way to tell sibling pages the city changed. Fixed with a small same-tab `CustomEvent`
+(`visitnow:location-change`) and a `useSelectedCity()` hook, since these are React Router siblings
+under `AppShell`'s `<Outlet/>` with no shared parent state, and `localStorage`'s own `storage` event
+deliberately never fires in the tab that made the write. Home and the clinics list now filter to the
+selected city and show an honest "VisitNow hasn't launched in {city} yet" card for any of the six
+cities in the list that aren't Hyderabad/Warangal/Bengaluru — rather than a silent empty grid that
+reads as broken.
+
+**Favicon now uses the real brand mark**, not `VisitNowMark.tsx`'s flatter in-app rendition —
+generated PNG sizes (16/32/180px) directly from the actual logo image supplied for this product
+(glossy blue "V", green checkmark).
+
+**Google Maps embed on clinic pages** — a keyless `<iframe src="https://www.google.com/maps?q=...
+&output=embed">`, no API key, no scraping. Deliberately queries only `location, city` (e.g.
+"Nakkalagutta Main Road, Warangal"), never the clinic's own name — the street is real public
+geography and resolves to a real, sensible map; the clinic name is fictional (§ above) and would
+either fail to resolve or, worse, coincidentally resolve to an unrelated real business.
+
+**Time-aware "Here now" / "Later today" badge**, for the exact case described: a doctor running
+two clinic sessions in one day (Dr. Suman's real 9–1 / 6–10 shape) should visibly show which one
+they're *actually* at right now, not just which ones have a queue toggled open. Added
+`sessionTiming()` (`lib/sessions.ts`) — a pure comparison of real `now()` against a session's own
+`date`/`startTime`/`endTime`, deliberately independent of the staff-controlled `isQueueOpen`/
+`doctorStatus` fields DoctorCard already reads. Shown only on `DoctorPage`'s "Practices at N
+clinics" grid, where a multi-session doctor actually exists.
+
+**That badge immediately surfaced two real, pre-existing bugs**, not new ones it introduced:
+
+1. `GET /api/doctors/:id` never attached `doctor` onto its own sessions (only `clinic`) — every
+   other catalog endpoint had been fixed to do this in an earlier pass (§12), this one was missed.
+   `DoctorCard` reads `session.doctor.photoUrl` unconditionally, so the entire "Practices at" grid
+   crashed with an uncaught `TypeError` the first time this session tried to render it. Fixed by
+   attaching `doctor` alongside `clinic` in that route, matching the others.
+2. Seed data's "live" sessions used fixed clock times (`startTime: '08:00'`), which only look live
+   at the specific hour someone happens to seed/restart the server. The new badge does a real
+   wall-clock comparison, so it correctly said "Session ended" for a session whose `isQueueOpen`
+   still said `true` and whose card still said "Serving #17" — accurate, but a visible contradiction
+   for a demo that can be opened at any hour, which matters a lot for something meant to be shown to
+   investors on no fixed schedule. Fixed by seeding the specific sessions a `TimingBadge` can ever
+   be shown for (Kumar/Reddy/Suman's "live" session and its same-doctor "later today" sibling)
+   relative to actual server-start time (`relTime(offsetHours)`) instead of a fixed clock time, so
+   they straddle "now" correctly no matter when the server starts. Every other session in the file
+   keeps a fixed time on purpose — nothing else compares it to the real clock, so there's nothing
+   for a fixed time to contradict.
+
+## 15. Hospital-side sync — answering a question asked ahead of building that side
+
+Raised while still on the patient side, explicitly framed as "we'll actually build this later, but
+here's my doubt now": how do online and offline tokens for the same session stay in sync, given
+only the hospital panel can ever issue an offline token?
+
+**Short answer: they already do, by construction — there is no separate sync problem to solve.**
+`QueueEntry.source` is `'online' | 'offline' | 'appointment'`, but all three live in exactly one
+`queueEntries` map per session, ordered by exactly one function (`queueEngine.ts`'s
+`compareEntries` — priority, then token number). There was never a second, offline-only data
+structure that a real sync mechanism would need to reconcile against the online one; "online" and
+"offline" are a label on one entry in one queue, not two queues. `callNext`, `estimateWait`, and
+every ordering computation already treat a walk-in token exactly like a remote one with the same
+priority and number — the unified-queue architecture (§1) already *is* the answer to "how do these
+stay synchronized."
+
+**Confirming the part that was actually a design question, not yet a fact:** "only the hospital
+panel can issue an offline token" — checked against the current code, not assumed. The patient app
+has no route, form, or API call that can create an entry with `source: 'offline'`; every
+patient-facing path that creates a `QueueEntry` (`TokenPaymentPage` → `generateToken`) hardcodes
+`'online'`. `source: 'offline'` only ever gets set from the staff console's own token-issue action.
+So this is already true today, not a future decision — it just hadn't been written down as a
+guarantee before now.
+
+**Explicitly deferred, per the same message's own "too soon" framing:** a hospital-side
+revenue/analytics dashboard (daily/monthly revenue, per-doctor/per-clinic breakdowns, download or
+print) is a real, reasonable ask for the eventual hospital panel, tracked here as a known future
+requirement rather than built now. It's a read/reporting layer over data this architecture already
+records (`hospitalFeeAmount`, `hospitalFeeStatus`, `paymentMethod` already exist per entry — see
+§3), not a new data model, so building it later shouldn't require touching the queue engine itself.
+
+## 16. Open questions (unresolved, flagged for a future decision)
 
 - **Real patient auth.** Login/Register currently collect a name+phone and function identically
   to Guest — no password is verified against anything (see §8.10 sibling reasoning: there's
   nothing to verify against yet). This is fine for a demo, not fine for a real product; the
   screens exist so the *shape* of the flow is right, not because the auth is real.
-- **Location.** "Select Location" in this prototype is a fixed list of demo cities with no real
-  geolocation or distance calculation — Hyderabad-area demo data doesn't currently vary by city.
-  Real distance-based discovery needs actual clinic coordinates, which the current `Clinic` model
-  doesn't carry (`location`/`city` are free text — see the original architecture's own note on
-  this).
+- **Location.** ~~"Select Location" in this prototype is a fixed list of demo cities with no real
+  geolocation or distance calculation — Hyderabad-area demo data doesn't currently vary by city.~~
+  Superseded by §14: city selection now actually filters Home/Clinics to real per-city demo data
+  (Hyderabad/Warangal/Bengaluru). What's still unsolved: real distance-based discovery needs actual
+  clinic coordinates, which the current `Clinic` model doesn't carry (`location`/`city` are free
+  text), and "Detect my location" still only resolves to Hyderabad regardless of real coordinates
+  (no reverse-geocoding key) — seeing that resolve to Warangal now would still be wrong, since the
+  browser's real location during development is nowhere near it.
 - **Token capacity limits.** See edge cases #16-18 — not modeled at all yet. Worth deciding
   whether capacity should be a hard cap or a soft "queue is long" warning before building it.
 - **Refunds.** See edge case #31 — no data model support yet; needs a real payment gateway
