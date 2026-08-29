@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Clock, XCircle } from 'lucide-react'
+import { CalendarClock, CheckCircle2, Circle, Clock, XCircle } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Badge, DoctorStatusLine } from '../../components/ui/Badge'
@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { cancelEntry, fetchQueueEntry } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
+import { futureDateLabel } from '../../lib/sessions'
 import { ApiError, type QueueStatus } from '../../lib/types'
 
 /** The most important patient screen in the product (brief §15) — a
@@ -36,6 +37,13 @@ export function ActiveVisitPage() {
   // the staff-side equivalent at that point, not a patient cancellation;
   // see backend QUEUE_TRANSITIONS).
   const canCancel = entry.status === 'waiting'
+  // A token booked ahead via SessionDetailPage's DateStrip (see
+  // docs/VISITNOW_PRODUCT_DECISIONS.md §17) is a real `waiting` entry
+  // exactly like a same-day one — but "3 patients ahead, ~12 min" is
+  // meaningless and actively misleading for a queue that hasn't started
+  // yet. Anything still `waiting` on a future date gets its own honest
+  // "booked ahead" state instead of the live-tracking UI below.
+  const isBookedAhead = entry.status === 'waiting' && session.date > new Date().toISOString().slice(0, 10)
 
   const confirmCancel = async () => {
     setCancelling(true)
@@ -57,31 +65,49 @@ export function ActiveVisitPage() {
         <p className="text-sm font-semibold text-[var(--color-text)]">{doctor.name}</p>
         <p className="text-xs text-[var(--color-text-muted)]">
           {clinic.name} · {session.label} · {session.startTime}–{session.endTime}
+          {isBookedAhead && ` · ${futureDateLabel(session.date)}`}
         </p>
       </div>
 
-      <div
-        className={`flex flex-col items-center gap-4 rounded-[var(--radius-xl)] border p-7 text-center shadow-[var(--shadow-md)] transition-colors ${
-          youAreNext || entry.status === 'called'
-            ? 'border-[var(--color-brand-300)] bg-[var(--color-brand-50)]'
-            : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-        }`}
-      >
-        <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Your token</p>
-        <p key={entry.tokenNumber} className="animate-count-pulse font-display text-[76px] font-bold leading-none text-[var(--color-brand-700)]">
-          {entry.tokenNumber}
-        </p>
-        <StatusHero status={entry.status} patientsAhead={patientsAhead} estimatedMinutes={estimatedMinutes} />
-      </div>
+      {isBookedAhead ? (
+        <div className="flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center shadow-[var(--shadow-md)]">
+          <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Your token</p>
+          <p className="font-display text-[76px] font-bold leading-none text-[var(--color-brand-700)]">{entry.tokenNumber}</p>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-brand-50)] px-4 py-1.5 text-sm font-bold text-[var(--color-brand-700)]">
+            <CalendarClock size={15} aria-hidden="true" />
+            Booked for {futureDateLabel(session.date)}
+          </span>
+          <p className="max-w-sm text-sm text-[var(--color-text-muted)]">
+            This session hasn't started yet, so there's no live queue position to show. Come back
+            on {futureDateLabel(session.date)} to track it as the queue moves.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div
+            className={`flex flex-col items-center gap-4 rounded-[var(--radius-xl)] border p-7 text-center shadow-[var(--shadow-md)] transition-colors ${
+              youAreNext || entry.status === 'called'
+                ? 'border-[var(--color-brand-300)] bg-[var(--color-brand-50)]'
+                : 'border-[var(--color-border)] bg-[var(--color-surface)]'
+            }`}
+          >
+            <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Your token</p>
+            <p key={entry.tokenNumber} className="animate-count-pulse font-display text-[76px] font-bold leading-none text-[var(--color-brand-700)]">
+              {entry.tokenNumber}
+            </p>
+            <StatusHero status={entry.status} patientsAhead={patientsAhead} estimatedMinutes={estimatedMinutes} />
+          </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Now serving" value={session.currentToken ?? '—'} />
-        <StatCard label="Patients ahead" value={entry.status === 'waiting' ? patientsAhead : '—'} />
-      </div>
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard label="Now serving" value={session.currentToken ?? '—'} />
+            <StatCard label="Patients ahead" value={entry.status === 'waiting' ? patientsAhead : '—'} />
+          </div>
 
-      <div className="flex items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] px-4 py-3">
-        <DoctorStatusLine status={session.doctorStatus} delayMinutes={session.delayMinutes} />
-      </div>
+          <div className="flex items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] px-4 py-3">
+            <DoctorStatusLine status={session.doctorStatus} delayMinutes={session.delayMinutes} />
+          </div>
+        </>
+      )}
 
       {entry.verificationCode && (
         <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">

@@ -1,4 +1,4 @@
-import { CheckCircle2 } from 'lucide-react'
+import { CalendarClock, CheckCircle2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { BackLink } from '../../components/patient/BackLink'
@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { fetchQueueEntry } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
+import { futureDateLabel } from '../../lib/sessions'
 
 /** The one-time landing after a successful token + payment — separate
  * from Active Visit (which a patient will come back to repeatedly) per
@@ -27,6 +28,10 @@ export function TokenConfirmedPage() {
 
   const { entry, session, patientsAhead } = data
   const code = entry.verificationCode ?? '----'
+  // Same date-awareness as ActiveVisitPage (see its isBookedAhead
+  // comment) — this landing page is reached by the identical booked-
+  // ahead path, so it needs the identical honest framing.
+  const isBookedAhead = session.date > new Date().toISOString().slice(0, 10)
 
   return (
     <div className="animate-rise-in mx-auto flex max-w-xl flex-col items-center gap-6 text-center">
@@ -38,23 +43,43 @@ export function TokenConfirmedPage() {
       </div>
       <div>
         <h1 className="font-display text-2xl font-bold text-[var(--color-text)]">Token confirmed!</h1>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">You don't need to stand in the waiting queue.</p>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          {isBookedAhead ? "You're booked ahead — you don't need to stand in line that day." : "You don't need to stand in the waiting queue."}
+        </p>
       </div>
 
       <div className="w-full rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
-          <div className="text-left">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Your token</p>
-            <p className="font-display text-3xl font-bold text-[var(--color-brand-700)]">#{entry.tokenNumber}</p>
+        {isBookedAhead ? (
+          <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
+            <div className="text-left">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Your token</p>
+              <p className="font-display text-3xl font-bold text-[var(--color-brand-700)]">#{entry.tokenNumber}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Booked for</p>
+              <p className="flex items-center gap-1.5 font-display text-lg font-bold text-[var(--color-text)]">
+                <CalendarClock size={16} aria-hidden="true" />
+                {futureDateLabel(session.date)}
+              </p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Now serving</p>
-            <p className="font-display text-3xl font-bold text-[var(--color-text)]">{session.currentToken ?? '—'}</p>
+        ) : (
+          <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
+            <div className="text-left">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Your token</p>
+              <p className="font-display text-3xl font-bold text-[var(--color-brand-700)]">#{entry.tokenNumber}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Now serving</p>
+              <p className="font-display text-3xl font-bold text-[var(--color-text)]">{session.currentToken ?? '—'}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         <p className="pt-4 text-sm text-[var(--color-text-muted)]">
-          {patientsAhead} {patientsAhead === 1 ? 'patient' : 'patients'} ahead of you right now.
+          {isBookedAhead
+            ? `This session hasn't started yet — come back on ${futureDateLabel(session.date)} to track your live position.`
+            : `${patientsAhead} ${patientsAhead === 1 ? 'patient' : 'patients'} ahead of you right now.`}
         </p>
 
         <div className="mt-5 rounded-[var(--radius-lg)] bg-[var(--color-brand-50)] p-4">
@@ -85,7 +110,7 @@ export function TokenConfirmedPage() {
       </div>
 
       <Button size="lg" className="w-full" onClick={() => navigate(`/queue/${entry.id}`, { replace: true })}>
-        Track Live Queue
+        {isBookedAhead ? 'View my booking' : 'Track Live Queue'}
       </Button>
     </div>
   )

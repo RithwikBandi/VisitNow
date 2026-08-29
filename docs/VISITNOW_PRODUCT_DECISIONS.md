@@ -463,7 +463,35 @@ requirement rather than built now. It's a read/reporting layer over data this ar
 records (`hospitalFeeAmount`, `hospitalFeeStatus`, `paymentMethod` already exist per entry — see
 §3), not a new data model, so building it later shouldn't require touching the queue engine itself.
 
-## 16. Open questions (unresolved, flagged for a future decision)
+## 17. Booking ahead was already possible but never actually finished
+
+Found while doing a general "keep closing gaps" pass, not from new feedback: `SessionDetailPage`'s
+`canGetToken` was never gated on `session.date`, and DateStrip already links to future-dated
+sessions (seeded specifically so it would have more than one day to switch between — §earlier).
+Put those two facts together (DateStrip's multi-date seeding is §12's "date selector" fix) and a
+patient could already get a real token for a session two days from now — the button never stopped
+them — but nothing downstream knew that had happened:
+
+- `ActiveVisitPage` and `TokenConfirmedPage` both unconditionally showed live-queue framing
+  ("You're next — please be ready", "0 patients ahead of you right now") for a token whose session
+  hadn't started, because `estimateWait` correctly computes "0 ahead" for the only entry in an
+  empty future queue — accurate math, wrong thing to tell someone about a session that opens in
+  48 hours.
+- `VisitsPage`'s "Upcoming" tab was hardcoded permanently empty, reserved in an earlier pass for a
+  scheduled-appointment feature that doesn't exist — while every future-dated `waiting` token
+  quietly landed in "Active" instead, indistinguishable from someone genuinely in today's live
+  queue.
+
+Fixed by making date-awareness the actual, small missing piece rather than descoping the whole
+booking-ahead path: `isBookedAhead` (`session.date > today`) on both queue-status pages swaps the
+live tracking UI for an honest "Booked for {date}, come back that day" state (verification code,
+fees, and Cancel all still fully work — a future booking is still a real committed token, just not
+a live queue position yet); `VisitsPage.tabFor` now checks `session.date` too, so "Upcoming"
+finally shows real content — every token booked ahead, with its date printed on the row — instead
+of a tab that could never have anything in it. No new data model, no new screens; the date was
+already on every `Session` fetched, it just wasn't being read.
+
+## 18. Open questions (unresolved, flagged for a future decision)
 
 - **Real patient auth.** Login/Register currently collect a name+phone and function identically
   to Guest — no password is verified against anything (see §8.10 sibling reasoning: there's
