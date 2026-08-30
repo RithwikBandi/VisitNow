@@ -1,25 +1,22 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------
-   VisitNow design system — v2, built around the actual VisitNow mark (a
-   glossy blue "V" with a green checkmark). This replaces the earlier
-   "calm clinical" teal/serif system from the first patient-experience
-   pass entirely — this is a deliberate identity change, not a refinement
-   of the old one, per the product brief for this rebuild.
+   VisitNow design system — v3, the full re-skin. See docs/DESIGN.md for
+   the reasoning behind every decision here; this file is the token
+   implementation of that document, not a place to make new calls.
 
-   Blue carries structure, trust, primary actions. Green is reserved for
-   confirmation and "good" states (paid, available, queue moving) — the
-   same role the checkmark plays in the mark itself, not a generic
-   secondary color used everywhere. Sora for anything that should feel
-   like a headline or a big number (a token, a price); Manrope for
-   everything functional. Two sans faces, not a serif/sans pairing — this
-   product is meant to read as a modern consumer app, not an editorial
-   healthcare brand.
+   The governing idea: VisitNow is a ticket counter, not a dashboard.
+   Warm paper-toned neutrals (not cool blue-gray SaaS default), Archivo
+   for anything numeral/display (the token itself is the hero), Public
+   Sans for functional text. Brand blue carries structure; accent green
+   is reserved for confirmed/paid/live-moving states only — never a
+   decorative accent, the same single job the checkmark plays in the
+   actual VisitNow mark.
 --------------------------------------------------------------------- */
 
 @theme {
-  --font-display: 'Sora', ui-sans-serif, system-ui, sans-serif;
-  --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
 
   --color-brand-50: #eaf1ff;
   --color-brand-100: #d3e2ff;
@@ -40,19 +37,38 @@
   --color-accent-500: #1fa64d;
   --color-accent-600: #17873e;
   --color-accent-700: #126b32;
+
+  --color-stamp: #b8442f;
+  --color-stamp-bg: #fbeae6;
 }
 
 :root {
-  --color-bg: #f6f8fc;
+  /* v3.1 — the warm "ticket stock" cream (#faf7f1) read as beige/dated
+     in real use, not the intended "paper" warmth. Replaced with a cool
+     near-white (the same neutral apple.com uses for its own section
+     canvas, #f5f5f7) stepped against a pure-white surface — the color
+     step is still the primary depth cue (docs/DESIGN.md §6), just
+     without the cream undertone. */
+  --color-bg: #f5f5f7;
   --color-surface: #ffffff;
+  --color-surface-sunken: #ececef;
   --color-surface-raised: #ffffff;
 
-  --color-text: #101a2e;
-  --color-text-muted: #5a6478;
-  --color-text-faint: #8991a3;
+  --color-text: #14161c;
+  --color-text-muted: #55586a;
+  --color-text-faint: #86899a;
 
-  --color-border: #e6eaf3;
-  --color-border-strong: #d2d9e8;
+  /* docs/DESIGN.md refers to these as --color-ink*; kept as aliases of
+     the --color-text* tokens above rather than a second source of
+     truth, since most existing components already reference
+     --color-text* and a rename-everywhere pass would touch every file
+     for no visual benefit. */
+  --color-ink: var(--color-text);
+  --color-ink-muted: var(--color-text-muted);
+  --color-ink-faint: var(--color-text-faint);
+
+  --color-border: #e4e4e9;
+  --color-border-strong: #d1d1d9;
 
   --color-success: #17873e;
   --color-success-bg: #e9f9ee;
@@ -63,25 +79,44 @@
 
   --color-source-online: #144cd1;
   --color-source-online-bg: #eaf1ff;
-  --color-source-offline: #5a6478;
+  --color-source-offline: #585d6b;
   --color-source-offline-bg: #eef0f5;
   --color-source-appointment: #7c4fd4;
   --color-source-appointment-bg: #f2ecfc;
 
+  /* Radius scale — deliberately not one generic "rounded-2xl everywhere"
+     value. Badge/chip, input, button, ordinary card, and the
+     TicketCard each get their own named tier (docs/DESIGN.md §4). */
+  --radius-badge: 0.375rem;
   --radius-sm: 0.5rem;
-  --radius-md: 0.875rem;
+  --radius-btn: 0.625rem;
+  --radius-md: 0.75rem;
   --radius-lg: 1.25rem;
-  --radius-xl: 1.75rem;
+  --radius-xl: 1.25rem;
+  --radius-ticket: 1.25rem;
 
-  --shadow-sm: 0 1px 2px rgba(16, 26, 46, 0.06);
-  --shadow-md: 0 8px 24px -6px rgba(16, 26, 46, 0.14);
-  --shadow-lg: 0 24px 50px -14px rgba(16, 26, 46, 0.24);
+  --shadow-sm: 0 1px 3px rgba(22, 26, 34, 0.1);
+  --shadow-md: 0 8px 24px -6px rgba(22, 26, 34, 0.14);
+  --shadow-lg: 0 24px 50px -14px rgba(22, 26, 34, 0.22);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 * {
   border-color: var(--color-border);
+}
+
+/* Tailwind's own preflight resets <button> to `cursor: default` — a
+ * deliberate upstream choice (a button isn't always clickable, e.g. a
+ * disabled one), but this app has no bare <button> that isn't
+ * clickable; disabled ones already get `cursor-not-allowed` from
+ * Button's own class. Left at the reset default, every custom button
+ * across the site (DateStrip, tab pills, chips, menu rows, the payment
+ * gateway's own controls) silently lost its pointer-on-hover affordance
+ * — the exact "hover doesn't do anything" bug reported live. */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
 }
 
 html {
@@ -93,6 +128,7 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
@@ -100,9 +136,20 @@ body {
   color: var(--color-brand-900);
 }
 
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Tabular figures everywhere a number updates or needs to line up —
+   token counts, prices, countdowns, digit columns. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Hides the scrollbar on horizontally-scrolling strips (specialty
-   chips) without hiding the ability to scroll — the scroll affordance
-   there is the partially-cut-off last chip, not a visible scrollbar. */
+   chips, city rail) without hiding the ability to scroll — the scroll
+   affordance there is the partially-cut-off last chip, not a visible
+   scrollbar. */
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -111,10 +158,53 @@ body {
   display: none;
 }
 
+/* ---------------------------------------------------------------------
+   TicketCard — the signature container (docs/DESIGN.md §4). A white
+   surface with a dashed perforation line and two canvas-colored
+   circular notches punched into its edges at that line's height, the
+   literal die-cut ticket-stub silhouette. No drop shadow: the notch is
+   the depth cue, and a shadow flattens the illusion.
+
+   The notches are two small circles matching the page canvas color,
+   positioned half-off each edge — a well-worn CSS trick for a "punched
+   hole," reliable across browsers without clip-path/mask edge cases.
+   Only correct when the card sits directly on --color-bg, which is
+   true everywhere it's used (Active Visit, Token Confirmed, Home's
+   active-token summary).
+--------------------------------------------------------------------- */
+.ticket-card {
+  position: relative;
+  background: var(--color-surface);
+  border-radius: var(--radius-ticket);
+  overflow: visible;
+}
+
+.ticket-perforation {
+  position: relative;
+  border-top: 1.5px dashed var(--color-border-strong);
+}
+
+.ticket-perforation::before,
+.ticket-perforation::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--color-bg);
+}
+.ticket-perforation::before {
+  left: -10px;
+}
+.ticket-perforation::after {
+  right: -10px;
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -122,9 +212,14 @@ body {
   }
 }
 .animate-rise-in {
-  animation: rise-in 0.35s var(--ease-out);
+  animation: rise-in 0.4s var(--ease-out);
 }
 
+/* Restored during the v3 re-skin pass — dropped when index.css was
+   rewritten wholesale, silently breaking StaffQueueConsolePage's
+   BigStat value-change bump (still referenced there) with no error,
+   just no motion. Found by grepping for the class after noticing it
+   defined nowhere. */
 @keyframes count-pulse {
   0% {
     transform: scale(1);
@@ -174,5 +269,26 @@ body {
   }
   to {
     width: 100%;
+  }
+}
+
+/* Signature press feedback — every pressable control moves on press,
+   not only on hover (hover is pointer-only). */
+.press-scale {
+  transition-property: transform, background-color, border-color, color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+.press-scale:active {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

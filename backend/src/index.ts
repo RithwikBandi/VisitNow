@@ -1,7 +1,10 @@
 import cors from 'cors'
 import express from 'express'
+import { adminRouter } from './routes/admin.js'
 import { appointmentsRouter } from './routes/appointments.js'
+import { authRouter } from './routes/auth.js'
 import { catalogRouter } from './routes/catalog.js'
+import { dashboardRouter } from './routes/dashboard.js'
 import { queueEntriesRouter } from './routes/queueEntries.js'
 import { sessionsRouter } from './routes/sessions.js'
 import { staffRouter } from './routes/staff.js'
@@ -17,10 +20,13 @@ app.use(express.json())
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
 app.use('/api', catalogRouter)
+app.use('/api', authRouter)
 app.use('/api', sessionsRouter)
 app.use('/api', queueEntriesRouter)
 app.use('/api', appointmentsRouter)
 app.use('/api', staffRouter)
+app.use('/api', dashboardRouter)
+app.use('/api', adminRouter)
 
 /** Demo-only convenience: rebuild the seed data from scratch on demand,
  * so a messed-up demo state (mid-presentation, mid-testing) is one call

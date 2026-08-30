@@ -1,13 +1,25 @@
 import { ApiError, type Appointment, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type QueuePriority, type QueueSource, type RevenueReport, type Session, type SessionWithRelations } from './types'
+import { getToken } from './auth'
+import type { PublicAccount } from './accountTypes'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') ?? ''
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Every /staff, /dashboard, /admin call needs the bearer token — one
+  // change point here instead of passing it through every call site
+  // individually. Patient-facing calls have no token to send (getToken()
+  // returns null for a browser with no staff session), which is fine:
+  // those routes don't require one.
+  const token = getToken()
   let response: Response
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init?.headers,
+      },
     })
   } catch {
     throw new ApiError("Couldn't reach the VisitNow server. Check your connection and try again.", 0)
@@ -29,8 +41,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 // --- Catalog: doctors, clinics, today's sessions --------------------------
 
-export function fetchTodaysSessions(): Promise<{ sessions: SessionWithRelations[] }> {
-  return request('/api/sessions/today')
+export function fetchTodaysSessions(clinicId?: string): Promise<{ sessions: SessionWithRelations[] }> {
+  return request(`/api/sessions/today${clinicId ? `?clinicId=${encodeURIComponent(clinicId)}` : ''}`)
 }
 
 export function fetchClinics(): Promise<{ clinics: Clinic[] }> {
@@ -131,4 +143,58 @@ export function convertAppointment(appointmentId: string): Promise<{ appointment
 
 export function fetchRevenueReport(): Promise<RevenueReport> {
   return request('/api/staff/revenue')
+}
+
+// --- Auth-scoped dashboards & admin ---------------------------------------
+
+export interface DoctorDashboard {
+  doctor: Doctor
+  todayTokensSeen: number
+  todayRevenue: number
+  monthlyRevenue: number
+  dailyAverageTokens: number
+  clinics: Clinic[]
+  sessions: Session[]
+}
+export function fetchDoctorDashboard(): Promise<DoctorDashboard> {
+  return request('/api/dashboard/doctor')
+}
+
+export interface ClinicDashboard {
+  clinic: Clinic
+  doctorCount: number
+  report: RevenueReport
+}
+export function fetchClinicDashboard(): Promise<ClinicDashboard> {
+  return request('/api/dashboard/clinic')
+}
+
+export interface PlatformDashboard {
+  clinics: Clinic[]
+  report: RevenueReport
+}
+export function fetchPlatformDashboard(): Promise<PlatformDashboard> {
+  return request('/api/dashboard/platform')
+}
+
+export function verifyCode(sessionId: string, code: string): Promise<{ entry: QueueEntry }> {
+  return request(`/api/sessions/${sessionId}/verify?code=${encodeURIComponent(code)}`)
+}
+
+export function onboardClinic(input: {
+  name: string
+  location: string
+  city: string
+  adminEmail: string
+  adminPassword: string
+  adminName: string
+}): Promise<{ clinic: Clinic; account: PublicAccount }> {
+  return request('/api/admin/clinics', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function createClinicStaff(
+  clinicId: string,
+  input: { email: string; password: string; displayName: string },
+): Promise<{ account: PublicAccount }> {
+  return request(`/api/admin/clinics/${clinicId}/staff`, { method: 'POST', body: JSON.stringify(input) })
 }

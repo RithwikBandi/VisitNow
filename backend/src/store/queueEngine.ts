@@ -88,6 +88,21 @@ function generateVerificationCode(sessionId: string): string {
   return code
 }
 
+/** The front-desk "check this patient in" lookup — a receptionist types
+ * the 4-digit code a patient shows on their phone, this finds the
+ * matching token. Scoped to one session (the same scope
+ * generateVerificationCode uses for uniqueness) and to non-terminal
+ * entries, since a code from an already-completed/cancelled visit isn't
+ * useful to look up and could otherwise collide with a newer entry's
+ * reused code within the same session. Returns undefined rather than
+ * throwing — "no match" is a normal, expected outcome here (a mistyped
+ * code), not an error condition the way a missing session id would be. */
+export function findByVerificationCode(sessionId: string, code: string): QueueEntry | undefined {
+  return queueEntriesForSession(sessionId).find(
+    (e) => e.verificationCode === code && !['completed', 'cancelled', 'no_show'].includes(e.status),
+  )
+}
+
 export function generateToken(
   sessionId: string,
   input: { source: QueueEntry['source']; patientName: string; patientPhone?: string; paymentMethod?: PaymentMethod },

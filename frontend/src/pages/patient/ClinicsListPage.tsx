@@ -23,7 +23,9 @@ export function ClinicsListPage() {
   return (
     <div className="animate-rise-in flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-[26px] font-bold tracking-tight text-[var(--color-text)]">Clinics &amp; hospitals</h1>
+        <h1 className="font-display text-[32px] font-black leading-[1.05] tracking-[-0.022em] text-[var(--color-text)] sm:text-[38px]">
+          Clinics &amp; hospitals
+        </h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">Browse by clinic to see every doctor practicing there in {city}.</p>
       </div>
 
@@ -57,7 +59,7 @@ export function ClinicsListPage() {
         <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface)] px-5 py-8 text-center">
           <p className="text-sm font-semibold text-[var(--color-text)]">VisitNow hasn't launched in {city} yet</p>
           <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
-            We're live in Hyderabad, Warangal, and Bengaluru today — change your location above to browse those.
+            We're live in Hyderabad, Warangal, and Bengaluru today. Change your location above to browse those.
           </p>
         </div>
       )}

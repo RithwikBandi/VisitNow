@@ -1,15 +1,21 @@
-/** Hospital-side-only endpoints — no separate backend auth exists for
- * these any more than for anything else in this prototype (see
- * lib/staffAuth.ts's own doc comment: the staff gate is a client-side
- * product gate, not a security boundary, by explicit prototype-scope
- * decision). This file exists to keep "things only the staff console
- * calls" visually separate from the patient-facing catalog/session
- * routes, not to imply a different trust level the backend enforces. */
+/** Hospital-side-only endpoints. Now genuinely role-scoped server-side
+ * (see store/authEngine.ts, middleware/auth.ts) — a clinic_admin only
+ * ever sees their own clinic's revenue, a super_admin sees everything,
+ * and a doctor/clinic_staff account can't reach this at all (their own
+ * scoped views are /dashboard/doctor and the operational queue console,
+ * not a revenue report). */
 import { Router } from 'express'
-import { computeRevenueReport } from '../store/revenue.js'
+import { requireAuth } from '../middleware/auth.js'
+import { computeRevenueReport, scopeReportToClinic } from '../store/revenue.js'
 
 export const staffRouter = Router()
 
-staffRouter.get('/staff/revenue', (_req, res) => {
-  res.json(computeRevenueReport())
+staffRouter.get('/staff/revenue', requireAuth, (req, res) => {
+  const account = req.account!
+  const report = computeRevenueReport()
+  if (account.role === 'super_admin') return res.json(report)
+  if (account.role === 'clinic_admin' && account.clinicId) {
+    return res.json(scopeReportToClinic(report, account.clinicId))
+  }
+  res.status(403).json({ error: 'This area requires a clinic admin or super admin account.' })
 })

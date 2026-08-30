@@ -83,6 +83,11 @@ export interface Doctor {
   /** Placeholder headshots in demo data (see seed.ts) — same swap-later
    * story as Clinic.photoUrl. */
   photoUrl?: string
+  /** Reverse pointer to the Account (role: 'doctor') that logs in as this
+   * doctor, if one exists — see types/account.ts. Optional because a
+   * Doctor entity can exist (seeded, or added by a clinic admin) before
+   * anyone's issued it a login. */
+  accountId?: string
 }
 
 /**
@@ -147,10 +152,11 @@ export interface QueueEntry {
   completedAt?: string
 
   /** Set only when priority !== 'regular' — who at the hospital assigned
-   * it, per the brief's "patients can't self-declare emergency" rule. Not
-   * enforced by real auth in this prototype (no staff accounts yet), but
-   * the field exists so the UI can show it and the rule is structurally
-   * true even if not access-controlled yet. */
+   * it, per the brief's "patients can't self-declare emergency" rule. Now
+   * backed by real auth (types/account.ts, store/authEngine.ts): the
+   * route defaults this to the authenticated account's displayName rather
+   * than trusting a client-supplied string, though an explicit override is
+   * still accepted for backward compatibility. */
   priorityAssignedBy?: string
 
   /** Only set for source: 'online' — an offline (walk-in) or converted-

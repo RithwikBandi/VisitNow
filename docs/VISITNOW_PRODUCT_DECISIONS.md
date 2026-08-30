@@ -583,7 +583,376 @@ existed alongside it.
   relationship to mean anything anyway.
 - **How much of "the hospital side" §18 actually built.** One real feature (revenue &amp;
   analytics) end-to-end, not a full hospital admin platform — there is still no UI to create/edit a
-  clinic or doctor (seed.ts is the only way new ones exist), no per-hospital login separation (one
-  shared staff passcode covers every clinic, same as before this round), and no notification layer.
-  Worth being explicit about rather than letting "the hospital side got built this round" imply more
-  than it does.
+  clinic or doctor (seed.ts is the only way new ones exist besides §26's one "attach a login to an
+  existing doctor" action), ~~no per-hospital login separation (one shared staff passcode covers
+  every clinic, same as before this round)~~ **resolved by §26** — real per-account, per-clinic/
+  per-doctor scoped auth now exists, server-enforced. No notification layer still. Worth being
+  explicit about rather than letting "the hospital side got built this round" imply more than it
+  does.
+
+## 20. Full visual re-skin — "ticket counter, not a dashboard" (in progress)
+
+### Situation
+
+A new brief asked for a ground-up frontend visual rebuild — explicitly production-grade UI on top
+of the existing (intentionally simplified) backend, scrapping the previous visual system rather
+than patching it. Two source assets were supplied: a 19-screen AI-generated mobile app mockup
+(workflow reference only, explicitly not to be copied visually) and this project's own decision
+log. No separate logo file arrived — colors/proportions for the brand mark are read from the
+mockup's splash/login screens, same as the pre-existing `VisitNowMark.tsx` already was.
+
+### Why it matters
+
+Everything token-first, unified-queue, payment-split, and edge-case-related documented in §1-§19
+was already sound and is being kept — this round is scoped to visual language only. Getting that
+scope boundary wrong (rewriting business logic while re-skinning) would have thrown away nineteen
+sections of already-verified product decisions for no reason the new brief actually asked for.
+
+### Decision
+
+New design direction written up in full at `docs/DESIGN.md`: **VisitNow is a ticket counter, not
+a dashboard.** Every token/visit surface uses a `TicketCard` component (a die-cut notch + dashed
+perforation, CSS-only, no image assets) instead of a generic rounded card; live numbers (now-
+serving, patients-ahead) use a `SplitFlapNumber` odometer-roll primitive instead of a plain text
+swap; typography moved from Sora/Manrope to Archivo (display/numerals) + Public Sans (body) — the
+Font Selection Procedure's own reflexive-pick-and-reject step flagged Sora/Manrope as exactly the
+kind of default this rebuild is meant to move away from; the palette moved from a cool blue-gray
+neutral to a warm "ticket stock" paper neutral, with the logo's blue/green kept but green
+re-confirmed as confirmation-only, never decorative.
+
+Existing CSS custom-property *names* (`--color-text`, `--color-surface`, `--color-border`, etc.)
+were kept and re-valued rather than renamed, since nearly every component references them —
+`docs/DESIGN.md`'s own `--color-ink*` naming is aliased to `--color-text*` in `index.css` rather
+than treated as a second source of truth. This was found the hard way: the landing page's first
+draft used `var(--color-ink)` directly (matching the design doc's prose) and rendered as a
+washed-out, barely-legible panel because that variable didn't actually exist yet — background-color
+with an undefined `var()` resolves to its initial value (transparent), not an error, so the bug was
+silent until a real screenshot caught it. Verified live at both 1440px and 390px after the fix.
+
+### Prototype behavior
+
+Landing page (§15 of the new brief's "major rebuild" emphasis) is fully rebuilt: a live departure
+board in the hero (real `fetchTodaysSessions` data, not a static mockup — the "every number on
+this page is real" rule now extends to the hero itself), a connected numbered rail for "How it
+works" instead of four identical cards, an asymmetric lead-panel-plus-list layout for "Features",
+and a board-style listing instead of stock city photography for "Cities" (present stock photos
+labeled as if they were real photos of Hyderabad/Warangal/Bengaluru would itself have been a
+fabricated-placeholder problem, not a real one). Design system foundation (`index.css`, `Button`,
+`Badge`, `SplitFlapNumber`, `TicketCard`) is in place and shared by every page going forward.
+
+`ActiveVisitPage` and `TokenConfirmedPage` — the brief's own "most important patient screen"
+(§23) — are rebuilt on `TicketCard` + `SplitFlapNumber`: the token number now lives inside the
+die-cut stub card, now-serving/patients-ahead roll like an odometer instead of swapping instantly.
+Verified live against real API data (created a real queue entry via the running backend, not just
+visual inspection of the component in isolation) at 480px. `HomePage`, `SessionDetailPage`,
+`ClinicCard`/`DoctorCard` were **not** rewritten and still verify correctly — they inherit the new
+palette/typography for free because the CSS custom-property *names* were kept (see the
+`--color-ink` note above), which is the payoff of that naming decision: pages nobody has touched
+yet already look re-skinned, not stuck on the old system.
+
+### Production consideration
+
+Remaining pages still pending the same structural pass (they inherit new colors/type already, but
+haven't had `TicketCard`/`SplitFlapNumber`/layout attention where it'd matter): discovery
+(Clinics list, Clinic detail, Doctor detail), token payment, Visits, Profile + its sub-pages, Auth,
+and the staff console (explicitly not the primary target per the brief's §32, lighter pass
+expected). Also still open: a full responsive sweep beyond the pages already spot-checked above.
+This section will keep being updated per surface rather than left to imply the whole rebuild
+landed in one sitting.
+
+## 21. Navigation audit — DateStrip's Today/Tomorrow Back bug (found, fixed)
+
+### Situation
+
+The rebuild brief names a specific navigation failure by example: switching Today → Tomorrow on a
+session and then pressing Back should return to whatever page you actually came from (Doctor,
+Clinic, Home), not to Today. Auditing every date/tab/filter control against that example found
+one real instance of it: `DateStrip` (the date switcher on `SessionDetailPage`) called
+`navigate(\`/sessions/${s.id}\`)` with no `replace`, so every date tapped pushed a new history
+entry. Tapping Today → Tomorrow → Day 3 → Back landed back on Tomorrow, not on whatever page
+linked into the doctor's session in the first place.
+
+### Why it matters
+
+This is exactly the failure mode described, not a hypothetical — verified by reading the actual
+`navigate()` call, not assumed from the pattern's name. A patient comparing two dates before
+picking one would have Back silently misbehave on the very screen the brief chose as its example.
+
+### Decision
+
+`DateStrip`'s navigate call now passes `{ replace: true }`. Switching which date's session you're
+viewing for the *same* doctor/clinic/slot is a same-page state change wearing a different route
+(each date is genuinely a different `Session` record, but the *user's mental model* is "still
+looking at this doctor, just a different day" — see brief's own framing), not a drill-down that
+deserves its own history entry.
+
+### Prototype behavior
+
+Fixed. Every other date/tab/filter control was audited against the same question (does this push
+a history entry for a same-page state change?) and found already correct: `VisitsPage`'s tab
+switch and `HomePage`'s search/specialty/sort are plain `useState`, no routing involved at all;
+`LocationPicker`'s city change dispatches a same-tab `CustomEvent`, also no routing. `DateStrip`
+was the one real offender.
+
+### Production consideration
+
+The `Get Token` button on `SessionDetailPage`, and every other page-to-page drill-down link in the
+app, correctly uses a normal push navigation (no `replace`) — that distinction (same-page state
+change vs. genuine drill-down) is the actual rule to apply to any new date/tab/filter control added
+later, not "always replace" or "never replace."
+
+## 22. Real user testing found three more bugs the read-through missed
+
+### Situation
+
+Live use (not code review) surfaced three problems the previous round's static audit didn't catch:
+(1) the landing page was unreachable for anyone who'd ever logged in — `RootRedirect` sent any
+saved identity straight to `/home`, permanently; (2) every same-page navigation (switching a
+session's date, and by extension anything else using `usePolling` with a `resetKey`) blanked the
+*entire* page to a loading skeleton, reading as a hard reload; (3) the header buried the
+hospital/clinic entry point as a 13px text link, and `AuthPage` never mentioned it at all.
+
+### Why it matters
+
+(1) and (2) are both severity-blocking for a demo: an investor who logs in once can never see the
+marketing site again at its own URL, and every click anywhere in the date/tab family looked broken.
+(3) is a real product requirement (brief §32/§4) not being met — two distinct audiences need two
+distinct, visible doors in, not one visible door and one hidden one.
+
+### Decision
+
+**Landing page is now always at `/`, full stop** — `RootRedirect` is deleted, `App.tsx` renders
+`LandingPage` directly at `/`. `LandingPage` reads `getPatientIdentity()` itself and adapts its own
+CTAs (header, hero, final CTA) — "Get your token" / "Find a doctor near you" for a new visitor,
+"Go to my queue" / "Continue as {name}" for a returning one — the way stripe.com or notion.so still
+show their marketing homepage to a signed-in visitor rather than redirecting it away.
+
+**`usePolling` no longer clears `data` to `null` on a `resetKey` change** — only `loading` flips.
+Every page's `loading && !data` skeleton branch was the actual cause of the "refresh" look; keeping
+the last good frame on screen during a same-page navigation and swapping in the new data once it
+resolves is the standard pattern, not the "clear immediately, stale data is worse" instinct the
+previous round of this fix optimized for. Verified live: screenshotted 60ms after clicking
+Tomorrow on `SessionDetailPage` — the page stayed fully painted, no blank frame.
+
+**`AuthPage` rebuilt as a real split-panel desktop layout** (brand/live-board panel + form,
+previously a narrow centered card floating on an empty desktop page — itself a "phone screen
+scaled onto a desktop viewport" instance of the exact mistake §11 already fixed once elsewhere).
+Both panels, plus the landing page header (now a visible secondary button, not a text link) and its
+mobile menu, carry a "Hospital & clinic sign in" entry point.
+
+### Prototype behavior
+
+All three fixed and verified live: landing page reachable with an identity set (screenshotted,
+confirmed URL stays `/`), date-switch mid-flight screenshot shows no blank frame, both auth
+surfaces show the staff entry point.
+
+### Production consideration
+
+`SessionDetailPage`'s sibling-dates effect was also depending on the *entire* `sessionData` object
+(a new reference every 5s poll tick), refetching `fetchDoctor` every 5 seconds for no reason —
+changed to depend on the doctor id + clinic/label as stable primitives instead. Not user-visible,
+but worth fixing while already in this code: an effect re-running on every poll tick regardless of
+whether anything it actually depends on changed is the kind of thing that eventually causes a real
+race, not just wasted requests.
+
+## 23. Background color read as beige, single-column pages read as empty desktop, map looked missing
+
+### Situation
+
+Direct feedback with a screenshot: the warm "ticket stock" cream background (#faf7f1) read as
+dated/beige rather than premium; `SessionDetailPage` at desktop width was a narrow column
+centered in a large gray void — the exact "phone screen on a desktop page" problem this rebuild
+keeps finding and fixing in one place at a time; and the Google Maps embed on `ClinicDetailPage`
+wasn't rendering for the reporter.
+
+### Decision
+
+**Background repainted cooler.** `--color-bg` moved from `#faf7f1` (cream) to `#f5f5f7` — the same
+neutral apple.com uses for its own section canvas. Text/border tokens shifted very slightly cooler
+to match. One token-value change in `index.css`, propagates everywhere since no component
+hardcodes a color outside that file (checked with a grep before calling it done, not assumed).
+
+**`SessionDetailPage` and `TokenPaymentPage` rebuilt as real two-column desktop layouts.** Neither
+sidebar is decorative filler: `SessionDetailPage`'s shows the actual `queueData` the page was
+already fetching (previously only used to compute a count) as a live queue preview — token
+numbers, priority/source badges, genuinely useful — plus a link back to the clinic.
+`TokenPaymentPage`'s sidebar is a sticky order-summary/checkout panel (doctor, fee breakdown,
+total, the pay button), the same pattern any real checkout uses. Both collapse to the original
+single-column flow below `lg`.
+
+**The map embed is now a progressive enhancement, not the only path to the address.** A Google
+Maps iframe with no API key is exactly the kind of third-party embed ad blockers, Brave, and Safari
+tracking prevention commonly block outright — that was almost certainly why it looked "missing." A
+static address card (pin, address, a real "Open in Google Maps" link that opens Maps directly) is
+now the reliable primary content, sitting beside the iframe rather than depending on it; the iframe
+box also keeps a visible bordered/backed placeholder state so an unrendered iframe never reads as
+empty space.
+
+### Prototype behavior
+
+All three fixed and rebuilt; screenshotted at the same 1440px width the original report's
+screenshot was taken at to confirm the specific page no longer looks like a phone view.
+
+### Production consideration
+
+A real production build would very likely still want a proper Google Maps JS API key (static
+Static Maps image or full JS SDK) rather than the keyless `output=embed` iframe — that's a real,
+paid integration decision for later, not something to solve by trying harder to make the free
+embed reliable, since its reliability ceiling is a browser-privacy-setting problem, not a code bug.
+
+## 24. Cursor affordance, logout destination, auth options, and a copy-voice sweep
+
+### Situation
+
+Four more pieces of direct feedback: hover didn't show a pointer cursor anywhere on the site;
+logging out landed back on the login form instead of the public site; the Login/Register/Guest
+picker "felt lame"; and the site's copy still carried visible em dashes, a recognizable AI-writing
+tell.
+
+### Decision
+
+**Cursor**: traced to Tailwind's own preflight, which resets `<button>` to `cursor: default` (a
+deliberate upstream choice for buttons that aren't always clickable). Every custom button in this
+app *is* always clickable when not disabled, so one global rule in `index.css`
+(`button:not(:disabled) { cursor: pointer }`) fixes it everywhere at once — verified via a computed-
+style check, not just a visual look.
+
+**Logout**: `ProfilePage`'s logout and `DeleteProfilePage`'s delete both now `navigate('/')` instead
+of `/auth` — the same "a signed-out visitor belongs on the public site" reasoning as §22's landing-
+page fix, applied consistently to every place a session actually ends.
+
+**Auth options**: replaced the two-way pill tab (Log in / Register) with Guest demoted below a
+divider, with three equally-weighted option cards (Guest, Log in, Register) — Guest first, since
+it's genuinely this prototype's lowest-friction real path (§10: functionally identical to Login/
+Register, no password checked either way), not squeezed in as an afterthought.
+
+**Copy sweep**: every em dash used as prose punctuation in user-visible text (headings, body copy,
+error/empty states, button labels) across every page and component was replaced with a period,
+comma, or colon, whichever read most naturally — grepped and re-verified clean afterward. Em dashes
+used as a genuine *empty-value placeholder* (`session.currentToken ?? '—'`, matching a real "no
+data yet" table/stat convention, not prose) were deliberately left alone — a different character
+serves a different job there, and this fix is about writing voice, not that convention.
+
+### Prototype behavior
+
+All four fixed and verified live (cursor via computed style, logout via post-click URL check,
+options and copy via direct read).
+
+## 25. Closing out the remaining pages, and the staff console's own hardcoded cream
+
+### Situation
+
+Finishing the sweep across every remaining page: `DoctorPage`, `ClinicDetailPage`'s doctor grid,
+`TokenConfirmedPage`, `ProfilePage` + its sub-pages, `VisitsPage`, and a lighter pass on the staff
+console (intentionally not the primary rebuild target, per brief §32).
+
+### Decision
+
+Most of these needed nothing further — they already inherit the v3 tokens and read correctly
+(verified live, not assumed). Two real, separate bugs turned up while checking, both fixed:
+
+- **`StaffLayout` had its own hardcoded `bg-[#F4F2EC]`** — a second, undocumented cream color that
+  lived entirely outside the design-token system. The whole point of keeping token *names* stable
+  through the v3 re-skin (§20) was that every page picks up a palette change for free — this one
+  line was the one place that assumption was actually false, so the staff console kept the beige
+  background even after §23's fix everywhere else. Now uses `var(--color-bg)` like everything else.
+- **`.animate-count-pulse` was silently dead** — `index.css`'s full rewrite for v3 (§20) dropped
+  the `count-pulse` keyframe along with the old palette, but `StaffQueueConsolePage`'s `BigStat`
+  still referenced the class. No error, just a missing bump animation on the current-token/next-
+  patient numbers whenever they changed. Restored the keyframe. Found by grepping for the class
+  name and noticing it was defined nowhere, not by spotting it visually.
+
+`VisitsPage` widened to a 2-column grid at `lg`; everything else in the staff console (its `black/5`
+borders, dark header) was left as-is — that contrast with the patient app is a deliberate, already-
+documented decision (`StaffLayout`'s own comment), not an inconsistency to fix.
+
+### Prototype behavior
+
+Full site build clean; every page screenshotted at least once this round to confirm no visual
+breakage from any of the fixes above.
+
+## 26. Multi-tenant hospital/staff auth — resolving §19's open question
+
+### Situation
+
+Correct product-level pushback: the staff/hospital side was one shared passcode (`sunrise2026`),
+checked entirely client-side, giving whoever had it full visibility into every one of the 9 seeded
+clinics' every doctor's every queue and the platform-wide revenue report. That's fine for "does
+the concept work," not for a product meant to be sold to multiple independent clinics/hospitals as
+customers — each needs to be its own tenant, seeing only its own data, and the backend needs to
+actually enforce that. §19 already named this exact gap ("no per-hospital login separation").
+
+Also clarified in the same conversation: the "offline token" flow was never a second system needing
+to sync against the online one. `POST /api/sessions/:id/token` with `source: 'offline'` already
+wrote into the identical `Session`/`QueueEntry` the online flow uses — the actual gap was identity
+(who's logged in, which clinic/doctor they own) and two genuinely missing reception features
+(looking a patient up by their 4-digit code, and a printable walk-in token slip).
+
+### Decision
+
+**Four real roles**, a real `Account` entity (`backend/src/types/account.ts`), and server-side
+enforcement, not just UI hiding:
+
+- **super_admin** — platform-wide; onboards new clinics as tenants, sees platform revenue.
+- **clinic_admin** — scoped to one clinic (`Account.clinicId`); everything clinic_staff can do,
+  plus their own clinic's revenue/analytics and creating that clinic's staff logins.
+- **doctor** — scoped to themselves (`Account.doctorId`, reverse-pointed from `Doctor.accountId`);
+  a personal dashboard, not a clinic's aggregate. Works across as many clinics as they actually have
+  sessions at (`sessionsForDoctor`), with no need to enumerate clinics on the account itself.
+- **clinic_staff** — scoped to one clinic, operational only: generate + print walk-in tokens,
+  verify a patient's code, call next/skip/no-show/complete. No revenue or analytics access — 403'd
+  server-side even if someone found the URL, not just a hidden nav item.
+
+One ownership check (`assertCanActOnSession` in `backend/src/store/authEngine.ts`) is reused by
+every scoped route — session actions call it directly, entry actions resolve to their session and
+reuse it. Auth itself: a bearer token = an opaque string in an in-memory Map
+(`backend/src/store/store.ts`'s new `authTokens`), no JWT, no password hashing — the same honesty
+precedent the single shared passcode already established, just per-account and now actually
+checked server-side instead of trusted client-side.
+
+**One thing the initial plan got wrong, caught before it shipped**: staff-only routes
+(start/complete/skip/requeue/no-show/priority, call-next, doctor-status, offline token creation)
+correctly gained `requireAuth`. `POST /queue-entries/:id/cancel` almost did too, following the same
+list mechanically — but that route is the *patient's* "Cancel this visit" button on
+`ActiveVisitPage`, not a staff action, and patients still have no accounts (unchanged, out of
+scope). Caught by re-checking each route against its actual frontend caller before applying the
+blanket change, not by trusting the plan's own route list.
+
+Patient-facing routes are otherwise untouched: online token creation, reading a queue entry, and
+cancel all stay unauthenticated, verified live after every phase of this change (not just at the
+end) specifically so a regression there wouldn't ship unnoticed underneath the staff-side rework.
+
+### Prototype behavior
+
+Built and verified in phases, backend-first: login/logout/me → ownership enforcement on every
+existing action route (verified with real 401/403 boundary checks, not just reading the code) →
+scoped revenue (`scopeReportToClinic` in `revenue.ts`, a filter on the already-computed report, not
+a second aggregation path) → three new scoped dashboards (`/dashboard/doctor`, `/dashboard/clinic`,
+`/dashboard/platform`) → verify-by-code lookup (`findByVerificationCode` in `queueEngine.ts`) →
+tenant onboarding (`/admin/clinics`, shows the new admin's password once, on screen — no email
+sending in this phase). Then frontend: `lib/auth.ts` replacing `lib/staffAuth.ts` entirely (deleted,
+along with the old passcode-only `RequireStaffAuth`), a real email+password `StaffLoginPage` routing
+by role, a new `DoctorDashboardPage` (today/monthly revenue, daily average, per-clinic session
+list — reusing a `StatCard` extracted from `StaffRevenuePage` rather than copy-pasted), a new
+`SuperAdminPage` (tenant list + onboarding), and `StaffRevenuePage` reused as-is for both
+clinic_admin and super_admin since the backend now returns whatever the caller's role is allowed to
+see from the same endpoint. `StaffQueueConsolePage` gained the verify-code lookup and a new
+printable `TokenSlip` component (reusing `StaffRevenuePage`'s existing print-stylesheet pattern).
+
+Verified end-to-end with real logins for every seeded role (clinic_admin, clinic_staff, two
+multi-clinic doctors, super_admin): correct post-login routing, cross-clinic actions 403, revenue
+correctly scoped per role, `clinic_staff` has no Revenue nav and is 403'd if it hits the endpoint
+directly, a walk-in token generates a real printable slip, and a seeded verification code resolves
+to the right patient. Screenshotted, not just curl-verified, for the doctor dashboard, the admin
+tenant list, and the reception console mid-flow.
+
+### Production consideration
+
+Same non-goals as the rest of this prototype's honesty story, explicit rather than silent: no
+password hashing, no JWT/token expiry, no email verification or password reset, no general
+doctor/clinic-editing admin UI beyond the one "attach a login to an existing doctor" action, no
+`Organization` entity above `Clinic` (1 clinic = 1 tenant, matching every existing join in the data
+model — a hospital chain with multiple physical locations is a real, separate decision for when it's
+actually needed, not built speculatively now), and no audit log beyond the existing
+`priorityAssignedBy` field (now defaulted from the authenticated account's name rather than a
+client-supplied string). Patients still have no accounts — unchanged, intentionally out of scope.

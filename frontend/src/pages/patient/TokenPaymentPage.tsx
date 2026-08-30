@@ -77,83 +77,123 @@ export function TokenPaymentPage() {
   }
 
   return (
-    <div className="animate-rise-in mx-auto flex max-w-xl flex-col gap-6">
-      <BackLink />
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
-        <h1 className="font-display text-xl font-bold text-[var(--color-text)]">{doctor.name}</h1>
-        <p className="text-sm text-[var(--color-text-muted)]">
-          {clinic.name} · {session.label}
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <span className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Your details</span>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Full name"
-          className="rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-3 text-[15px] focus:border-[var(--color-brand-400)] focus:outline-none"
-        />
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone number (optional)"
-          type="tel"
-          className="rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-3 text-[15px] focus:border-[var(--color-brand-400)] focus:outline-none"
-        />
-      </div>
-
-      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-        <h2 className="mb-3 font-display text-base font-bold text-[var(--color-text)]">Fee breakdown</h2>
-        <Row label="Clinic token fee" value={`₹${hospitalFee}`} />
-        <Row label="VisitNow platform fee" value={`₹${PLATFORM_FEE_INR}`} />
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <span className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-faint)]">How would you like to pay?</span>
-
-        <PaymentOption
-          icon={CreditCard}
-          title="Pay token fee online"
-          detail={`Pay ₹${hospitalFee + PLATFORM_FEE_INR} now, in one payment`}
-          selected={method === 'ONLINE'}
-          onSelect={() => setMethod('ONLINE')}
-        />
-        <PaymentOption
-          icon={Wallet}
-          title="Pay at hospital"
-          detail={`Pay ₹${PLATFORM_FEE_INR} now · ₹${hospitalFee} at the clinic`}
-          selected={method === 'PAY_AT_HOSPITAL'}
-          onSelect={() => setMethod('PAY_AT_HOSPITAL')}
-        />
-      </div>
-
-      {formError && <p className="text-sm text-[var(--color-danger)]">{formError}</p>}
-
-      <div className="sticky bottom-4 flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-md)]">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[var(--color-text-muted)]">Paying now</span>
-          <span className="font-display text-lg font-bold text-[var(--color-text)]">₹{payNow}</span>
-        </div>
-        {payLater > 0 && (
-          <div className="flex items-center justify-between text-xs text-[var(--color-text-faint)]">
-            <span>Due at clinic</span>
-            <span>₹{payLater}</span>
+    <div className="animate-rise-in mx-auto grid max-w-5xl grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="flex flex-col gap-6">
+        <BackLink />
+        <div className="flex items-center gap-3.5 lg:hidden">
+          {doctor.photoUrl && <img src={doctor.photoUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
+            <h1 className="font-display text-xl font-bold text-[var(--color-text)]">{doctor.name}</h1>
+            <p className="text-sm text-[var(--color-text-muted)]">
+              {clinic.name} · {session.label}
+            </p>
           </div>
-        )}
-        <Button size="lg" className="mt-1 w-full" disabled={processing} onClick={openGateway}>
-          {`Pay ₹${payNow} & Get Token`}
-        </Button>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Your details</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+            className="rounded-[var(--radius-btn)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-3 text-[15px] focus:border-[var(--color-brand-400)] focus:outline-none"
+          />
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone number (optional)"
+            type="tel"
+            className="rounded-[var(--radius-btn)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-3 text-[15px] focus:border-[var(--color-brand-400)] focus:outline-none"
+          />
+        </div>
+
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 lg:hidden">
+          <h2 className="mb-3 font-display text-base font-bold text-[var(--color-text)]">Fee breakdown</h2>
+          <Row label="Clinic token fee" value={`₹${hospitalFee}`} />
+          <Row label="VisitNow platform fee" value={`₹${PLATFORM_FEE_INR}`} />
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-faint)]">How would you like to pay?</span>
+
+          <PaymentOption
+            icon={CreditCard}
+            title="Pay token fee online"
+            detail={`Pay ₹${hospitalFee + PLATFORM_FEE_INR} now, in one payment`}
+            selected={method === 'ONLINE'}
+            onSelect={() => setMethod('ONLINE')}
+          />
+          <PaymentOption
+            icon={Wallet}
+            title="Pay at hospital"
+            detail={`Pay ₹${PLATFORM_FEE_INR} now · ₹${hospitalFee} at the clinic`}
+            selected={method === 'PAY_AT_HOSPITAL'}
+            onSelect={() => setMethod('PAY_AT_HOSPITAL')}
+          />
+        </div>
+
+        {formError && <p className="text-sm text-[var(--color-danger)]">{formError}</p>}
+
+        <div className="sticky bottom-4 flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-md)] lg:hidden">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-[var(--color-text-muted)]">Paying now</span>
+            <span className="tabular-nums font-display text-lg font-bold text-[var(--color-text)]">₹{payNow}</span>
+          </div>
+          {payLater > 0 && (
+            <div className="flex items-center justify-between text-xs text-[var(--color-text-faint)]">
+              <span>Due at clinic</span>
+              <span>₹{payLater}</span>
+            </div>
+          )}
+          <Button size="lg" className="mt-1 w-full" disabled={processing} onClick={openGateway}>
+            {`Pay ₹${payNow} & Get Token`}
+          </Button>
+        </div>
       </div>
 
-      {showGateway && (
-        <PaymentGatewayModal
-          amount={payNow}
-          onCancel={() => setShowGateway(false)}
-          onSuccess={completeToken}
-        />
-      )}
+      {/* Desktop: a real order-summary sidebar, sticky as you scroll —
+          the same pattern any real checkout (Stripe, an e-commerce
+          cart) uses, and the actual reason this page now uses desktop
+          width instead of centering a phone-width form in it. */}
+      <aside className="hidden lg:block">
+        <div className="sticky top-20 flex flex-col gap-5 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+          <div className="flex items-center gap-3.5 border-b border-[var(--color-border)] pb-5">
+            {doctor.photoUrl && <img src={doctor.photoUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />}
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
+              <h1 className="font-display text-lg font-bold leading-tight text-[var(--color-text)]">{doctor.name}</h1>
+              <p className="text-[13px] text-[var(--color-text-muted)]">
+                {clinic.name} · {session.label}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="mb-3 font-display text-sm font-bold text-[var(--color-text)]">Fee breakdown</h2>
+            <Row label="Clinic token fee" value={`₹${hospitalFee}`} />
+            <Row label="VisitNow platform fee" value={`₹${PLATFORM_FEE_INR}`} />
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-[var(--color-border)] pt-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[var(--color-text-muted)]">Paying now</span>
+              <span className="tabular-nums font-display text-xl font-bold text-[var(--color-text)]">₹{payNow}</span>
+            </div>
+            {payLater > 0 && (
+              <div className="flex items-center justify-between text-xs text-[var(--color-text-faint)]">
+                <span>Due at clinic</span>
+                <span>₹{payLater}</span>
+              </div>
+            )}
+            <Button size="lg" className="mt-2 w-full" disabled={processing} onClick={openGateway}>
+              {`Pay ₹${payNow} & Get Token`}
+            </Button>
+          </div>
+        </div>
+      </aside>
+
+      {showGateway && <PaymentGatewayModal amount={payNow} onCancel={() => setShowGateway(false)} onSuccess={completeToken} />}
     </div>
   )
 }

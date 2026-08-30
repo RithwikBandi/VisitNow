@@ -235,7 +235,7 @@ export function PaymentGatewayModal({
               Pay ₹{amount}
             </button>
             <p className="mt-2 text-center text-[11px] text-[var(--color-text-faint)]">
-              Demo checkout — no real payment is processed.
+              Demo checkout. No real payment is processed.
             </p>
           </div>
         )}

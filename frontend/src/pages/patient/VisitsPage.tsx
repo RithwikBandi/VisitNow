@@ -73,16 +73,18 @@ export function VisitsPage() {
   const filtered = (rows ?? []).filter((r) => tabFor(r.entry, r.session) === tab)
 
   return (
-    <div className="animate-rise-in mx-auto flex max-w-2xl flex-col gap-5">
-      <h1 className="font-display text-2xl font-bold text-[var(--color-text)]">My Visits</h1>
+    <div className="animate-rise-in mx-auto flex max-w-4xl flex-col gap-5">
+      <h1 className="font-display text-[32px] font-black leading-[1.05] tracking-[-0.022em] text-[var(--color-text)] sm:text-[38px]">
+        My visits
+      </h1>
 
       <div className="scrollbar-none flex gap-2 overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`shrink-0 rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${
-              tab === t.id ? 'bg-[var(--color-brand-600)] text-white' : 'bg-[var(--color-border)]/60 text-[var(--color-text-muted)]'
+            className={`press-scale shrink-0 rounded-full px-4 py-2 text-[13px] font-bold ${
+              tab === t.id ? 'bg-[var(--color-brand-600)] text-white' : 'bg-[var(--color-surface-sunken)] text-[var(--color-text-muted)]'
             }`}
           >
             {t.label}
@@ -93,7 +95,7 @@ export function VisitsPage() {
       {rows === null && (
         <div className="flex flex-col gap-3">
           {[0, 1].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />
+            <div key={i} className="h-24 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-surface-sunken)]" />
           ))}
         </div>
       )}
@@ -115,7 +117,7 @@ export function VisitsPage() {
       )}
 
       {filtered.length > 0 && (
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {filtered.map(({ entry, session, doctor, clinic }) => (
             <Link
               key={entry.id}

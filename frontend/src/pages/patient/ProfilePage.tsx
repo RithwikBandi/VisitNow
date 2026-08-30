@@ -8,9 +8,13 @@ export function ProfilePage() {
   const navigate = useNavigate()
   const identity = getPatientIdentity()
 
+  // Logging out ends the session, so it should land somewhere a signed-
+  // out visitor actually belongs — the public marketing site, the same
+  // place anyone with no identity lands (see docs/VISITNOW_PRODUCT_DECISIONS.md
+  // §22) — not straight back into a login form with no context.
   const logout = () => {
     clearPatientIdentity()
-    navigate('/auth', { replace: true })
+    navigate('/', { replace: true })
   }
 
   return (
@@ -35,7 +39,7 @@ export function ProfilePage() {
 
       <button
         onClick={logout}
-        className="flex items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] py-3.5 text-sm font-bold text-[var(--color-text)] transition-colors hover:border-[var(--color-danger)]/40 hover:text-[var(--color-danger)]"
+        className="press-scale flex items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] py-3.5 text-sm font-bold text-[var(--color-text)] hover:border-[var(--color-danger)]/40 hover:text-[var(--color-danger)]"
       >
         <LogOut size={16} aria-hidden="true" />
         Logout

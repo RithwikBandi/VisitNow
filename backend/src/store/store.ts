@@ -10,12 +10,18 @@
  * every time.
  */
 import type { Appointment, Clinic, Doctor, QueueEntry, Session } from '../types/index.js'
+import type { Account, AuthToken } from '../types/account.js'
 
 export const clinics = new Map<string, Clinic>()
 export const doctors = new Map<string, Doctor>()
 export const sessions = new Map<string, Session>()
 export const queueEntries = new Map<string, QueueEntry>()
 export const appointments = new Map<string, Appointment>()
+export const accounts = new Map<string, Account>()
+/** token -> AuthToken. See types/account.ts's doc comment: an opaque
+ * string in a Map, not a JWT — proportional to everything else in this
+ * file already being an in-memory Map that resets on restart. */
+export const authTokens = new Map<string, AuthToken>()
 
 const idCounters = new Map<string, number>()
 /** Prefixed, human-scannable ids (e.g. "session-3", "doctor-2") instead
@@ -34,6 +40,8 @@ export function resetStore(): void {
   sessions.clear()
   queueEntries.clear()
   appointments.clear()
+  accounts.clear()
+  authTokens.clear()
   idCounters.clear()
 }
 
@@ -51,4 +59,13 @@ export function sessionsForDoctor(doctorId: string): Session[] {
 
 export function sessionsForClinic(clinicId: string): Session[] {
   return [...sessions.values()].filter((s) => s.clinicId === clinicId)
+}
+
+/** Case-insensitive — an email typo'd in different casing shouldn't fail
+ * to match its own account. Linear scan, same proportionality as every
+ * other xForY lookup in this file; accounts.size is small (a handful per
+ * clinic, not a real user base). */
+export function accountByEmail(email: string): Account | undefined {
+  const needle = email.trim().toLowerCase()
+  return [...accounts.values()].find((a) => a.email.toLowerCase() === needle)
 }

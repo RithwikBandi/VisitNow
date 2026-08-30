@@ -12,7 +12,8 @@
  * server starts, without requiring a click-through setup first.
  */
 import { PLATFORM_FEE_INR, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type Session } from '../types/index.js'
-import { clinics, doctors, nextId, queueEntries, sessions } from './store.js'
+import type { Account, AccountRole } from '../types/account.js'
+import { accounts, clinics, doctors, nextId, queueEntries, sessions } from './store.js'
 
 const NOW = new Date()
 const today = NOW.toISOString().slice(0, 10)
@@ -87,6 +88,19 @@ function addEntry(e: Omit<QueueEntry, 'id' | 'createdAt'> & { createdAt?: string
   const entry: QueueEntry = { id: nextId('queue'), createdAt: e.createdAt ?? new Date().toISOString(), ...e }
   queueEntries.set(entry.id, entry)
   return entry
+}
+
+function addAccount(a: {
+  role: AccountRole
+  email: string
+  password: string
+  displayName: string
+  clinicId?: string
+  doctorId?: string
+}): Account {
+  const account: Account = { id: nextId('account'), createdAt: new Date().toISOString(), ...a }
+  accounts.set(account.id, account)
+  return account
 }
 
 /** Fills in an online entry's payment fields the same way
@@ -814,6 +828,39 @@ export function seedDemoData(): void {
     doctorStatus: 'available',
     isQueueOpen: false,
   })
+
+  // --- Demo logins ---------------------------------------------------
+  // One account per role, so the rebuilt staff/hospital side (see
+  // docs/VISITNOW_PRODUCT_DECISIONS.md's multi-tenant auth section) is
+  // explorable with real, differently-scoped credentials immediately —
+  // not one shared passcode that saw everything. This is the one place
+  // every demo login lives; there's no "forgot password"/email flow in
+  // this phase, so a login not listed here doesn't exist.
+  //
+  // | Account                 | Role         | Scope                          | Email                              | Password         |
+  // |--------------------------|--------------|---------------------------------|-------------------------------------|------------------|
+  // | VisitNow Ops             | super_admin  | every clinic, platform revenue  | admin@visitnow.app                  | visitnow2026     |
+  // | Sunrise/City Care admin  | clinic_admin | Sunrise Multispecialty Clinic   | admin@sunriseclinic.demo            | sunrise2026      |
+  // | Metro Diagnostics admin  | clinic_admin | Metro Diagnostics & Clinic      | admin@metrodiagnostics.demo         | metro2026        |
+  // | Kakatiya General admin   | clinic_admin | Kakatiya General Clinic         | admin@kakatiyaclinic.demo           | kakatiya2026     |
+  // | Sunrise front desk       | clinic_staff | Sunrise Multispecialty Clinic   | frontdesk@sunriseclinic.demo        | frontdesk2026    |
+  // | Dr. Ashwin Kumar         | doctor       | Sunrise + City Care Hospital    | ashwin.kumar@visitnow.demo          | doctor2026       |
+  // | Dr. Kavya Reddy          | doctor       | Metro Diagnostics + Lakeview    | kavya.reddy@visitnow.demo           | doctor2026       |
+  //
+  // Kumar and Reddy are deliberately the two doctors already seeded
+  // working two clinics each, above — the doctor dashboard's "your
+  // clinics" list has genuine multi-clinic data to demo, not a
+  // placeholder built to only ever show one.
+  addAccount({ role: 'super_admin', email: 'admin@visitnow.app', password: 'visitnow2026', displayName: 'VisitNow Ops' })
+  addAccount({ role: 'clinic_admin', email: 'admin@sunriseclinic.demo', password: 'sunrise2026', displayName: 'Sunrise Admin', clinicId: sunrise.id })
+  addAccount({ role: 'clinic_admin', email: 'admin@metrodiagnostics.demo', password: 'metro2026', displayName: 'Metro Diagnostics Admin', clinicId: metroDiagnostics.id })
+  addAccount({ role: 'clinic_admin', email: 'admin@kakatiyaclinic.demo', password: 'kakatiya2026', displayName: 'Kakatiya Admin', clinicId: kakatiyaClinic.id })
+  addAccount({ role: 'clinic_staff', email: 'frontdesk@sunriseclinic.demo', password: 'frontdesk2026', displayName: 'Sunrise Front Desk', clinicId: sunrise.id })
+
+  const kumarAccount = addAccount({ role: 'doctor', email: 'ashwin.kumar@visitnow.demo', password: 'doctor2026', displayName: drKumar.name, doctorId: drKumar.id })
+  drKumar.accountId = kumarAccount.id
+  const reddyAccount = addAccount({ role: 'doctor', email: 'kavya.reddy@visitnow.demo', password: 'doctor2026', displayName: drReddy.name, doctorId: drReddy.id })
+  drReddy.accountId = reddyAccount.id
 }
 
 // Excludes 'Lakshmi Narayan' and 'Anitha George' — both used explicitly

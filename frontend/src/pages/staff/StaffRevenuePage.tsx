@@ -1,5 +1,6 @@
 import { Download, IndianRupee, Printer, Ticket, TrendingUp } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
+import { StatCard } from '../../components/staff/StatCard'
 import { fetchRevenueReport } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
 import type { RevenueClinicRow, RevenueDoctorRow, RevenueSourceRow } from '../../lib/types'
@@ -101,7 +102,7 @@ export function StaffRevenuePage() {
           above via print:hidden and shows this instead, so a printed page
           reads as a report, not a UI screenshot. */}
       <div className="hidden print:block">
-        <h1 className="font-display text-xl font-bold">VisitNow — Revenue report</h1>
+        <h1 className="font-display text-xl font-bold">VisitNow: revenue report</h1>
         <p className="text-sm text-[var(--color-text-muted)]">Generated {new Date(data.generatedAt).toLocaleString('en-IN')}</p>
       </div>
 
@@ -112,17 +113,24 @@ export function StaffRevenuePage() {
         <StatCard icon={IndianRupee} label="VisitNow platform fees" value={inr(data.totals.platformFeeCollected)} />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <RevenueTable
-          title="By clinic"
-          rows={data.byClinic}
-          renderLabel={(r: RevenueClinicRow) => (
-            <>
-              <p className="font-semibold text-[var(--color-text)]">{r.clinicName}</p>
-              <p className="text-[12px] text-[var(--color-text-faint)]">{r.city}</p>
-            </>
-          )}
-        />
+      {/* "By clinic" is meaningless (a table with one row) for a
+          clinic_admin, whose report is already scoped to their one
+          clinic server-side — hide it rather than show a table proving
+          nothing. A super_admin's unscoped report still has several
+          rows, so it stays for them. */}
+      <div className={`grid grid-cols-1 gap-6 ${data.byClinic.length > 1 ? 'lg:grid-cols-2' : ''}`}>
+        {data.byClinic.length > 1 && (
+          <RevenueTable
+            title="By clinic"
+            rows={data.byClinic}
+            renderLabel={(r: RevenueClinicRow) => (
+              <>
+                <p className="font-semibold text-[var(--color-text)]">{r.clinicName}</p>
+                <p className="text-[12px] text-[var(--color-text-faint)]">{r.city}</p>
+              </>
+            )}
+          />
+        )}
         <RevenueTable
           title="By doctor"
           rows={data.byDoctor}
@@ -188,29 +196,6 @@ export function StaffRevenuePage() {
           </table>
         </div>
       </div>
-    </div>
-  )
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: typeof IndianRupee
-  label: string
-  value: string
-  tone?: 'accent' | 'warning'
-}) {
-  const toneClass = tone === 'accent' ? 'text-[var(--color-accent-700)]' : tone === 'warning' ? 'text-[var(--color-warning)]' : 'text-[var(--color-text)]'
-  return (
-    <div className="rounded-[var(--radius-lg)] border border-black/5 bg-white p-5">
-      <div className="flex items-center gap-2 text-[var(--color-text-faint)]">
-        <Icon size={15} aria-hidden="true" />
-        <p className="text-[12px] font-bold uppercase tracking-wide">{label}</p>
-      </div>
-      <p className={`mt-2 font-display text-2xl font-bold ${toneClass}`}>{value}</p>
     </div>
   )
 }

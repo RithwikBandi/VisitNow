@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react'
 import type { DoctorStatus, QueuePriority, QueueSource, QueueStatus } from '../../lib/types'
 
-type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'source-online' | 'source-offline' | 'source-appointment'
+type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'stamp' | 'source-online' | 'source-offline' | 'source-appointment'
 
 const TONES: Record<Tone, string> = {
-  neutral: 'bg-[var(--color-border)] text-[var(--color-text-muted)]',
+  neutral: 'bg-[var(--color-surface-sunken)] text-[var(--color-text-muted)]',
   success: 'bg-[var(--color-success-bg)] text-[var(--color-success)]',
   warning: 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]',
   danger: 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]',
+  stamp: 'bg-[var(--color-stamp-bg)] text-[var(--color-stamp)]',
   'source-online': 'bg-[var(--color-source-online-bg)] text-[var(--color-source-online)]',
   'source-offline': 'bg-[var(--color-source-offline-bg)] text-[var(--color-source-offline)]',
   'source-appointment': 'bg-[var(--color-source-appointment-bg)] text-[var(--color-source-appointment)]',
@@ -15,7 +16,9 @@ const TONES: Record<Tone, string> = {
 
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${TONES[tone]}`}>
+    <span
+      className={`inline-flex items-center rounded-[var(--radius-badge)] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] ${TONES[tone]}`}
+    >
       {children}
     </span>
   )
@@ -29,7 +32,7 @@ export function SourceBadge({ source }: { source: QueueSource }) {
 }
 
 const PRIORITY_LABEL: Record<QueuePriority, string> = { regular: 'Regular', priority: 'Priority', emergency: 'Emergency' }
-const PRIORITY_TONE: Record<QueuePriority, Tone> = { regular: 'neutral', priority: 'warning', emergency: 'danger' }
+const PRIORITY_TONE: Record<QueuePriority, Tone> = { regular: 'neutral', priority: 'warning', emergency: 'stamp' }
 
 export function PriorityBadge({ priority }: { priority: QueuePriority }) {
   if (priority === 'regular') return null

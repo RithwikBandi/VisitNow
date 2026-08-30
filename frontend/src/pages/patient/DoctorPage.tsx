@@ -33,8 +33,8 @@ export function DoctorPage() {
           {doctor.photoUrl && <img src={doctor.photoUrl} alt="" className="h-full w-full object-cover" />}
         </div>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-600)]">{doctor.specialty}</p>
-          <h1 className="mt-0.5 font-display text-2xl font-bold tracking-tight text-[var(--color-text)] sm:text-3xl">
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--color-brand-600)]">{doctor.specialty}</p>
+          <h1 className="mt-0.5 font-display text-[28px] font-black leading-[1.05] tracking-[-0.022em] text-[var(--color-text)] sm:text-[36px]">
             {doctor.name}
           </h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">{doctor.qualifications}</p>
@@ -67,7 +67,7 @@ export function DoctorPage() {
 
       {clinicCount > 1 && (
         <p className="rounded-[var(--radius-md)] bg-[var(--color-brand-50)] px-4 py-3 text-[13px] leading-relaxed text-[var(--color-brand-700)]">
-          {doctor.name} sees patients at more than one clinic today — each session runs its own independent queue.
+          {doctor.name} sees patients at more than one clinic today. Each session runs its own independent queue.
           Look for "Here now" to see which clinic they're currently at, or pick an upcoming session instead.
         </p>
       )}

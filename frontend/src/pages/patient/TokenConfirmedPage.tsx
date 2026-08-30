@@ -5,13 +5,15 @@ import { BackLink } from '../../components/patient/BackLink'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
+import { SplitFlapNumber } from '../../components/ui/SplitFlapNumber'
+import { TicketCard } from '../../components/ui/TicketCard'
 import { fetchQueueEntry } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
 import { futureDateLabel } from '../../lib/sessions'
 
 /** The one-time landing after a successful token + payment — separate
  * from Active Visit (which a patient will come back to repeatedly) per
- * the product brief's §31 vs §15. Its whole job is making the
+ * the product brief's §31 vs §23. Its whole job is making the
  * verification code and what-you-paid unmistakably clear before moving
  * on to live tracking. */
 export function TokenConfirmedPage() {
@@ -21,7 +23,7 @@ export function TokenConfirmedPage() {
   const { data, loading, error } = usePolling(fetcher, 30_000, entryId)
 
   if (loading && !data) {
-    return <div className="mt-8 h-96 animate-pulse rounded-[var(--radius-xl)] bg-[var(--color-border)]/40" />
+    return <div className="mx-auto max-w-xl h-[30rem] animate-pulse rounded-[var(--radius-ticket)] bg-[var(--color-surface-sunken)]" />
   }
   if (error && !data) return <ErrorState message={error} />
   if (!data) return null
@@ -33,84 +35,79 @@ export function TokenConfirmedPage() {
   // ahead path, so it needs the identical honest framing.
   const isBookedAhead = session.date > new Date().toISOString().slice(0, 10)
 
+  const stub = (
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-success-bg)] text-[var(--color-success)]">
+        <CheckCircle2 size={16} aria-hidden="true" />
+      </div>
+      <p className="text-[13.5px] font-bold text-[var(--color-text)]">
+        {isBookedAhead ? "You're booked ahead, no need to stand in line that day." : "You don't need to stand in the waiting queue."}
+      </p>
+    </div>
+  )
+
   return (
-    <div className="animate-rise-in mx-auto flex max-w-xl flex-col items-center gap-6 text-center">
-      <div className="w-full text-left">
-        <BackLink />
-      </div>
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-success-bg)] text-[var(--color-success)]">
-        <CheckCircle2 size={30} aria-hidden="true" />
-      </div>
-      <div>
-        <h1 className="font-display text-2xl font-bold text-[var(--color-text)]">Token confirmed!</h1>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          {isBookedAhead ? "You're booked ahead — you don't need to stand in line that day." : "You don't need to stand in the waiting queue."}
-        </p>
+    <div className="animate-rise-in mx-auto flex max-w-xl flex-col gap-6">
+      <BackLink />
+
+      <div className="text-center">
+        <h1 className="font-display text-2xl font-bold text-[var(--color-text)]">Token confirmed</h1>
       </div>
 
-      <div className="w-full rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-        {isBookedAhead ? (
-          <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
-            <div className="text-left">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Your token</p>
-              <p className="font-display text-3xl font-bold text-[var(--color-brand-700)]">#{entry.tokenNumber}</p>
+      <TicketCard stub={stub}>
+        <div className="flex flex-col items-center gap-5 text-center">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--color-text-faint)]">Your token</p>
+            <SplitFlapNumber
+              value={entry.tokenNumber}
+              minDigits={2}
+              className="font-display text-[64px] font-black leading-none tracking-[-0.022em] text-[var(--color-brand-700)]"
+            />
+          </div>
+
+          {isBookedAhead ? (
+            <div className="flex items-center gap-1.5 rounded-[var(--radius-badge)] bg-[var(--color-brand-50)] px-4 py-1.5 text-sm font-bold text-[var(--color-brand-700)]">
+              <CalendarClock size={15} aria-hidden="true" />
+              Booked for {futureDateLabel(session.date)}
             </div>
-            <div className="text-right">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Booked for</p>
-              <p className="flex items-center gap-1.5 font-display text-lg font-bold text-[var(--color-text)]">
-                <CalendarClock size={16} aria-hidden="true" />
-                {futureDateLabel(session.date)}
-              </p>
+          ) : (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              {patientsAhead} {patientsAhead === 1 ? 'patient' : 'patients'} ahead of you right now
+            </p>
+          )}
+
+          <div className="w-full border-t border-[var(--color-border)] pt-5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--color-text-faint)]">Verification code</p>
+            <div className="mt-2.5 flex justify-center gap-2">
+              {code.split('').map((digit, i) => (
+                <span
+                  key={i}
+                  className="tabular-nums flex h-12 w-10 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-surface-sunken)] font-display text-2xl font-bold text-[var(--color-brand-700)]"
+                >
+                  {digit}
+                </span>
+              ))}
+            </div>
+            <p className="mt-2.5 text-xs text-[var(--color-text-faint)]">Show this code at the clinic when requested.</p>
+          </div>
+
+          <div className="w-full text-left">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-semibold text-[var(--color-text)]">Platform fee</span>
+              <Badge tone="success">Paid</Badge>
+            </div>
+            <div className="mt-2 flex items-center justify-between text-sm">
+              <span className="font-semibold text-[var(--color-text)]">Clinic fee (₹{entry.hospitalFeeAmount})</span>
+              <Badge tone={entry.hospitalFeeStatus === 'PAID' ? 'success' : 'warning'}>
+                {entry.hospitalFeeStatus === 'PAID' ? 'Paid' : 'Pay at hospital'}
+              </Badge>
             </div>
           </div>
-        ) : (
-          <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
-            <div className="text-left">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Your token</p>
-              <p className="font-display text-3xl font-bold text-[var(--color-brand-700)]">#{entry.tokenNumber}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Now serving</p>
-              <p className="font-display text-3xl font-bold text-[var(--color-text)]">{session.currentToken ?? '—'}</p>
-            </div>
-          </div>
-        )}
-
-        <p className="pt-4 text-sm text-[var(--color-text-muted)]">
-          {isBookedAhead
-            ? `This session hasn't started yet — come back on ${futureDateLabel(session.date)} to track your live position.`
-            : `${patientsAhead} ${patientsAhead === 1 ? 'patient' : 'patients'} ahead of you right now.`}
-        </p>
-
-        <div className="mt-5 rounded-[var(--radius-lg)] bg-[var(--color-brand-50)] p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-brand-700)]">Verification code</p>
-          <div className="mt-2 flex justify-center gap-2.5">
-            {code.split('').map((digit, i) => (
-              <span
-                key={i}
-                className="flex h-12 w-10 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] font-display text-2xl font-bold text-[var(--color-brand-700)] shadow-[var(--shadow-sm)]"
-              >
-                {digit}
-              </span>
-            ))}
-          </div>
-          <p className="mt-2.5 text-xs text-[var(--color-brand-700)]">Show this code at the clinic when requested.</p>
         </div>
-
-        <div className="mt-5 flex items-center justify-between border-t border-[var(--color-border)] pt-4 text-left">
-          <span className="text-sm font-semibold text-[var(--color-text)]">Platform fee</span>
-          <Badge tone="success">Paid</Badge>
-        </div>
-        <div className="mt-2 flex items-center justify-between text-left">
-          <span className="text-sm font-semibold text-[var(--color-text)]">Clinic fee (₹{entry.hospitalFeeAmount})</span>
-          <Badge tone={entry.hospitalFeeStatus === 'PAID' ? 'success' : 'warning'}>
-            {entry.hospitalFeeStatus === 'PAID' ? 'Paid' : 'Pay at hospital'}
-          </Badge>
-        </div>
-      </div>
+      </TicketCard>
 
       <Button size="lg" className="w-full" onClick={() => navigate(`/queue/${entry.id}`, { replace: true })}>
-        {isBookedAhead ? 'View my booking' : 'Track Live Queue'}
+        {isBookedAhead ? 'View my booking' : 'Track live queue'}
       </Button>
     </div>
   )

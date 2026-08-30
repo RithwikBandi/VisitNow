@@ -1,10 +1,19 @@
+import { useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { DoctorStatusLine } from '../../components/ui/Badge'
 import { fetchTodaysSessions } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
+import { getCachedAccount } from '../../lib/auth'
 
 export function StaffHomePage() {
-  const { data, loading } = usePolling(fetchTodaysSessions, 15_000)
+  const account = getCachedAccount()
+  // clinicId scoping is a courtesy here too (the write actions are the
+  // real enforcement boundary, server-side — see requireOwnedSession in
+  // backend/src/routes/sessions.ts): a clinic_admin/clinic_staff session
+  // picker shouldn't even list another clinic's sessions to begin with.
+  // super_admin has no clinicId, so the fetch stays unfiltered for them.
+  const fetcher = useCallback(() => fetchTodaysSessions(account?.clinicId), [account?.clinicId])
+  const { data, loading } = usePolling(fetcher, 15_000, account?.clinicId)
   const sessions = data?.sessions ?? []
 
   return (
@@ -14,14 +23,14 @@ export function StaffHomePage() {
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">Pick a session to open its live queue.</p>
       </div>
 
-      {loading && !data && <div className="h-40 animate-pulse rounded-[var(--radius-lg)] bg-black/10" />}
+      {loading && !data && <div className="h-40 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-surface-sunken)]" />}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {sessions.map((s) => (
           <Link
             key={s.id}
             to={`/staff/sessions/${s.id}`}
-            className="flex flex-col gap-2 rounded-[var(--radius-lg)] border border-black/5 bg-white p-5 transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
+            className="flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
           >
             <div className="flex items-center gap-3">
               <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-[var(--color-border)]">

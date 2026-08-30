@@ -103,7 +103,7 @@ export function ContactPage() {
   return (
     <div className="animate-rise-in flex flex-col gap-4">
       <SubPageHeader title="Contact Us" />
-      <p className="text-sm text-[var(--color-text-muted)]">We're here to help — reach out anytime.</p>
+      <p className="text-sm text-[var(--color-text-muted)]">We're here to help. Reach out anytime.</p>
       <div className="flex flex-col gap-3">
         <ContactRow icon={Mail} label="Email" value="support@visitnow.app" />
         <ContactRow icon={Phone} label="Phone" value="+91 98765 43210" />
@@ -119,7 +119,7 @@ export function DeleteProfilePage() {
 
   const deleteProfile = () => {
     clearPatientIdentity()
-    navigate('/auth', { replace: true })
+    navigate('/', { replace: true })
   }
 
   return (
@@ -129,7 +129,7 @@ export function DeleteProfilePage() {
         <AlertTriangle size={20} className="mt-0.5 shrink-0 text-[var(--color-danger)]" aria-hidden="true" />
         <p className="text-sm text-[var(--color-danger)]">
           This removes your saved name and phone number from this device. It won't cancel any
-          active visit already in a doctor's queue — visit the Visits tab first if you need to
+          active visit already in a doctor's queue. Visit the Visits tab first if you need to
           cancel one.
         </p>
       </div>

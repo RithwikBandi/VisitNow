@@ -136,7 +136,7 @@ export function LocationBar({ onChange, compact = false }: { onChange?: (city: s
                 </button>
                 {detect === 'error' && (
                   <p className="mb-3 text-xs text-[var(--color-danger)]">
-                    Couldn't detect your location — pick your city below instead.
+                    Couldn't detect your location. Pick your city below instead.
                   </p>
                 )}
 

@@ -31,6 +31,23 @@ interface PollingState<T> {
  * however long was left on the old interval. Passing the route param
  * itself as `resetKey` makes navigation between sibling resources
  * refetch immediately, the same as a fresh mount would.
+ *
+ * A second bug found live, from real user testing rather than code
+ * reading: the first version of this fix cleared `data` to `null` on
+ * every `resetKey` change "so a new resource doesn't show the old
+ * one's stale data" — but every page checks `loading && !data` for its
+ * full-page skeleton, so clearing `data` meant switching Today ->
+ * Tomorrow (or any sibling-route navigation anywhere in the app) blew
+ * away the *entire* page — header, the date strip itself, everything —
+ * back to a pulse block, then repainted a second later. That reads as
+ * a hard page reload, not a same-app navigation, which is exactly what
+ * it looked like. The old data now stays on screen (`loading` still
+ * flips true, for anything that wants a subtle in-place indicator)
+ * until the new resource's fetch actually resolves, then swaps in one
+ * step — the standard "keep the last good frame, don't blank the
+ * screen" rule real SPAs follow. Briefly showing the previous
+ * resource's data for one network round-trip is a smaller cost than
+ * blanking a working page on every click.
  */
 export function usePolling<T>(fetchFn: () => Promise<T>, intervalMs: number, resetKey?: unknown): PollingState<T> {
   const [data, setData] = useState<T | null>(null)
@@ -53,13 +70,6 @@ export function usePolling<T>(fetchFn: () => Promise<T>, intervalMs: number, res
 
   useEffect(() => {
     let cancelled = false
-    // A genuinely new resource (resetKey changed) shouldn't show the
-    // previous one's stale data while the fresh fetch is in flight —
-    // only the very first mount (resetKey undefined-to-undefined, or
-    // any actual change) clears it; re-running for the same key alone
-    // (interval re-created for other reasons) wouldn't reach here since
-    // resetKey wouldn't have changed.
-    setData(null)
     setLoading(true)
     const tick = async () => {
       if (cancelled) return

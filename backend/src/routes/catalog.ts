@@ -40,11 +40,19 @@ catalogRouter.get('/doctors/:id', (req, res) => {
 
 /** Every session, each with its clinic/doctor already attached — this is
  * what the patient home screen's "today's doctors" list renders from
- * directly, no N+1 client-side lookups. */
-catalogRouter.get('/sessions/today', (_req, res) => {
+ * directly, no N+1 client-side lookups. Optional `clinicId` filter is
+ * for StaffHomePage's session picker: a clinic_admin/clinic_staff
+ * account shouldn't see another clinic's sessions in their own picker
+ * (the write actions are already server-enforced regardless — see
+ * sessions.ts's requireOwnedSession — this filter is about not showing
+ * the option in the first place, same "don't even offer what you can't
+ * do" spirit as StaffLayout's role-conditional nav). */
+catalogRouter.get('/sessions/today', (req, res) => {
   const today = new Date().toISOString().slice(0, 10)
-  const list = [...sessions.values()]
-    .filter((s) => s.date === today)
-    .map((s) => ({ ...s, doctor: doctors.get(s.doctorId), clinic: clinics.get(s.clinicId) }))
-  res.json({ sessions: list })
+  const { clinicId } = req.query
+  let list = [...sessions.values()].filter((s) => s.date === today)
+  if (clinicId && typeof clinicId === 'string') {
+    list = list.filter((s) => s.clinicId === clinicId)
+  }
+  res.json({ sessions: list.map((s) => ({ ...s, doctor: doctors.get(s.doctorId), clinic: clinics.get(s.clinicId) })) })
 })

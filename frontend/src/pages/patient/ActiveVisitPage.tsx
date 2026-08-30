@@ -1,19 +1,25 @@
-import { CalendarClock, CheckCircle2, Circle, Clock, XCircle } from 'lucide-react'
+import { CalendarClock, CheckCircle2, Circle, Clock, MapPin, Smartphone, XCircle } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
+import { BackLink } from '../../components/patient/BackLink'
 import { Badge, DoctorStatusLine } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
+import { SplitFlapNumber } from '../../components/ui/SplitFlapNumber'
+import { TicketCard } from '../../components/ui/TicketCard'
 import { cancelEntry, fetchQueueEntry } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
 import { futureDateLabel } from '../../lib/sessions'
 import { ApiError, type QueueStatus } from '../../lib/types'
 
-/** The most important patient screen in the product (brief §15) — a
+/** The most important patient screen in the product (brief §23) — a
  * patient will have this open, minimized, and reopened many times while
  * they wait somewhere else entirely. Polls every 3s so "the queue just
  * moved" reads as live without holding a socket open (see usePolling's
- * docstring) — the actual proof of the whole "skip the wait" promise. */
+ * docstring). The token number is built on the same TicketCard/
+ * SplitFlapNumber vocabulary as the rest of the product (docs/
+ * DESIGN.md) — this screen is the whole reason those two components
+ * exist, not an afterthought applying them. */
 const POLL_MS = 3_000
 
 export function ActiveVisitPage() {
@@ -25,17 +31,12 @@ export function ActiveVisitPage() {
   const [cancelError, setCancelError] = useState<string | null>(null)
 
   if (loading && !data) {
-    return <div className="mt-6 h-[32rem] animate-pulse rounded-[var(--radius-xl)] bg-[var(--color-border)]/40" />
+    return <div className="mx-auto max-w-xl h-[34rem] animate-pulse rounded-[var(--radius-ticket)] bg-[var(--color-surface-sunken)]" />
   }
   if (error && !data) return <ErrorState message={error} />
   if (!data) return null
 
   const { entry, session, doctor, clinic, patientsAhead, estimatedMinutes } = data
-  const youAreNext = entry.status === 'waiting' && patientsAhead === 0
-  // Only a still-waiting token can be cancelled — once staff has called
-  // it, the queue engine no longer allows that transition (a no-show is
-  // the staff-side equivalent at that point, not a patient cancellation;
-  // see backend QUEUE_TRANSITIONS).
   const canCancel = entry.status === 'waiting'
   // A token booked ahead via SessionDetailPage's DateStrip (see
   // docs/VISITNOW_PRODUCT_DECISIONS.md §17) is a real `waiting` entry
@@ -59,66 +60,76 @@ export function ActiveVisitPage() {
     }
   }
 
-  return (
-    <div className="animate-rise-in mx-auto flex max-w-xl flex-col gap-5">
-      <div className="text-center">
-        <p className="text-sm font-semibold text-[var(--color-text)]">{doctor.name}</p>
-        <p className="text-xs text-[var(--color-text-muted)]">
+  const stub = (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0 text-left">
+        <p className="truncate text-[13.5px] font-bold text-[var(--color-text)]">{doctor.name}</p>
+        <p className="truncate text-[12px] text-[var(--color-text-muted)]">
           {clinic.name} · {session.label} · {session.startTime}–{session.endTime}
           {isBookedAhead && ` · ${futureDateLabel(session.date)}`}
         </p>
       </div>
+      <StatusPill status={entry.status} />
+    </div>
+  )
+
+  return (
+    <div className="animate-rise-in mx-auto grid max-w-4xl grid-cols-1 gap-8 lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start">
+    <div className="flex flex-col gap-5">
+      <BackLink />
+
+      <TicketCard stub={stub}>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--color-text-faint)]">Your token</p>
+          <SplitFlapNumber
+            value={entry.tokenNumber}
+            minDigits={2}
+            className="font-display text-[80px] font-black leading-none tracking-[-0.022em] text-[var(--color-brand-700)]"
+          />
+
+          {isBookedAhead ? (
+            <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-badge)] bg-[var(--color-brand-50)] px-4 py-1.5 text-sm font-bold text-[var(--color-brand-700)]">
+              <CalendarClock size={15} aria-hidden="true" />
+              Booked for {futureDateLabel(session.date)}
+            </span>
+          ) : (
+            <StatusHero status={entry.status} patientsAhead={patientsAhead} estimatedMinutes={estimatedMinutes} />
+          )}
+        </div>
+      </TicketCard>
 
       {isBookedAhead ? (
-        <div className="flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-7 text-center shadow-[var(--shadow-md)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Your token</p>
-          <p className="font-display text-[76px] font-bold leading-none text-[var(--color-brand-700)]">{entry.tokenNumber}</p>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-brand-50)] px-4 py-1.5 text-sm font-bold text-[var(--color-brand-700)]">
-            <CalendarClock size={15} aria-hidden="true" />
-            Booked for {futureDateLabel(session.date)}
-          </span>
-          <p className="max-w-sm text-sm text-[var(--color-text-muted)]">
-            This session hasn't started yet, so there's no live queue position to show. Come back
-            on {futureDateLabel(session.date)} to track it as the queue moves.
-          </p>
-        </div>
+        <p className="text-center text-sm text-[var(--color-text-muted)]">
+          This session hasn't started yet, so there's no live queue position to show. Come back on{' '}
+          {futureDateLabel(session.date)} to track it as the queue moves.
+        </p>
       ) : (
         <>
-          <div
-            className={`flex flex-col items-center gap-4 rounded-[var(--radius-xl)] border p-7 text-center shadow-[var(--shadow-md)] transition-colors ${
-              youAreNext || entry.status === 'called'
-                ? 'border-[var(--color-brand-300)] bg-[var(--color-brand-50)]'
-                : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-            }`}
-          >
-            <p className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Your token</p>
-            <p key={entry.tokenNumber} className="animate-count-pulse font-display text-[76px] font-bold leading-none text-[var(--color-brand-700)]">
-              {entry.tokenNumber}
-            </p>
-            <StatusHero status={entry.status} patientsAhead={patientsAhead} estimatedMinutes={estimatedMinutes} />
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
-            <StatCard label="Now serving" value={session.currentToken ?? '—'} />
-            <StatCard label="Patients ahead" value={entry.status === 'waiting' ? patientsAhead : '—'} />
+            <StatCard label="Now serving" value={session.currentToken ?? '—'} live={session.currentToken != null} />
+            <StatCard
+              label="Patients ahead"
+              value={entry.status === 'waiting' ? patientsAhead : '—'}
+              live={entry.status === 'waiting'}
+            />
           </div>
 
-          <div className="flex items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] px-4 py-3">
+          <div className="flex items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
             <DoctorStatusLine status={session.doctorStatus} delayMinutes={session.delayMinutes} />
           </div>
         </>
       )}
 
       {entry.verificationCode && (
-        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-faint)]">Your visit</p>
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--color-text-faint)]">Your visit</p>
           <p className="mt-0.5 text-sm font-semibold text-[var(--color-text)]">Token #{entry.tokenNumber}</p>
 
           <div className="mt-3 flex justify-center gap-2">
             {entry.verificationCode.split('').map((digit, i) => (
               <span
                 key={i}
-                className="flex h-10 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-brand-50)] font-display text-lg font-bold text-[var(--color-brand-700)]"
+                className="tabular-nums flex h-10 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-surface-sunken)] font-display text-lg font-bold text-[var(--color-brand-700)]"
               >
                 {digit}
               </span>
@@ -139,11 +150,11 @@ export function ActiveVisitPage() {
       )}
 
       {canCancel && (
-        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           {!confirmingCancel ? (
             <button
               onClick={() => setConfirmingCancel(true)}
-              className="flex w-full items-center justify-center gap-1.5 text-sm font-bold text-[var(--color-danger)] transition-colors hover:text-[var(--color-danger)]/80"
+              className="press-scale flex w-full items-center justify-center gap-1.5 text-sm font-bold text-[var(--color-danger)] hover:text-[var(--color-danger)]/80"
             >
               <XCircle size={15} aria-hidden="true" />
               Cancel this visit
@@ -151,7 +162,7 @@ export function ActiveVisitPage() {
           ) : (
             <div className="flex flex-col gap-2">
               <p className="text-center text-sm font-semibold text-[var(--color-text)]">Cancel token #{entry.tokenNumber}?</p>
-              <p className="text-center text-xs text-[var(--color-text-muted)]">This can't be undone — you'll lose your place in the queue.</p>
+              <p className="text-center text-xs text-[var(--color-text-muted)]">This can't be undone. You'll lose your place in the queue.</p>
               {cancelError && <p className="text-center text-xs text-[var(--color-danger)]">{cancelError}</p>}
               <div className="mt-1 flex gap-2">
                 <Button variant="secondary" size="sm" className="flex-1" onClick={() => setConfirmingCancel(false)} disabled={cancelling}>
@@ -166,18 +177,60 @@ export function ActiveVisitPage() {
         </div>
       )}
     </div>
+
+      {/* Desktop-only sidebar — real content: clinic address (patients
+          need this to actually walk in) and a plain-language recap of
+          the product's own promise, not filler beside a narrow ticket. */}
+      <aside className="hidden flex-col gap-5 lg:flex">
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <h2 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">Where to go</h2>
+          <div className="mt-3 flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-brand-50)] text-[var(--color-brand-600)]">
+              <MapPin size={18} aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[var(--color-text)]">{clinic.name}</p>
+              <p className="text-[13px] text-[var(--color-text-muted)]">{clinic.location}</p>
+            </div>
+          </div>
+          <Link to={`/clinics/${clinic.id}`} className="press-scale mt-4 block text-center text-[13px] font-bold text-[var(--color-brand-600)] hover:text-[var(--color-brand-700)]">
+            View clinic details
+          </Link>
+        </div>
+
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <h2 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">
+            <Smartphone size={13} aria-hidden="true" />
+            While you wait
+          </h2>
+          <p className="mt-3 text-[13px] leading-relaxed text-[var(--color-text-muted)]">
+            You don't need to stand in the waiting room. Keep this page open (or come back to it
+            from Visits) and it updates on its own as the queue moves. Head over once you're a few
+            tokens from being called.
+          </p>
+        </div>
+      </aside>
+    </div>
   )
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+function StatCard({ label, value, live }: { label: string; value: string | number; live: boolean }) {
   return (
-    <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 text-center">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">{label}</p>
-      <p key={value} className="animate-count-pulse mt-1 font-display text-2xl font-bold text-[var(--color-text)]">
-        {value}
-      </p>
+    <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 text-center">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-text-faint)]">{label}</p>
+      {live && typeof value === 'number' ? (
+        <SplitFlapNumber value={value} className="mt-1 font-display text-2xl font-black text-[var(--color-text)]" />
+      ) : (
+        <p className="tabular-nums mt-1 font-display text-2xl font-bold text-[var(--color-text)]">{value}</p>
+      )}
     </div>
   )
+}
+
+function StatusPill({ status }: { status: QueueStatus }) {
+  if (status === 'waiting') return null
+  const label = { called: 'Called', in_progress: 'With doctor', completed: 'Completed', skipped: 'Skipped', cancelled: 'Cancelled', no_show: 'No-show' }[status]
+  return <Badge tone={status === 'in_progress' ? 'success' : status === 'called' ? 'warning' : 'neutral'}>{label}</Badge>
 }
 
 function StatusHero({
@@ -192,7 +245,7 @@ function StatusHero({
   if (status === 'called') {
     return (
       <div className="flex flex-col items-center gap-1.5">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-brand-600)] px-4 py-1.5 text-sm font-bold text-white">
+        <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-badge)] bg-[var(--color-brand-600)] px-4 py-1.5 text-sm font-bold text-white">
           <CheckCircle2 size={15} aria-hidden="true" /> You've been called
         </span>
         <p className="text-sm text-[var(--color-text-muted)]">Please head to the doctor's room now.</p>
@@ -201,7 +254,7 @@ function StatusHero({
   }
   if (status === 'in_progress') {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-success-bg)] px-4 py-1.5 text-sm font-bold text-[var(--color-success)]">
+      <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-badge)] bg-[var(--color-success-bg)] px-4 py-1.5 text-sm font-bold text-[var(--color-success)]">
         <Circle size={10} className="fill-current" aria-hidden="true" /> With the doctor
       </span>
     )
@@ -212,7 +265,7 @@ function StatusHero({
   if (status === 'skipped') {
     return (
       <p className="text-sm font-semibold text-[var(--color-danger)]">
-        You were skipped — check in with the reception desk to be re-added to the queue.
+        You were skipped. Check in with the reception desk to be re-added to the queue.
       </p>
     )
   }
@@ -221,8 +274,8 @@ function StatusHero({
   }
   if (patientsAhead === 0) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-brand-600)] px-4 py-1.5 text-sm font-bold text-white">
-        You're next — please be ready
+      <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-badge)] bg-[var(--color-brand-600)] px-4 py-1.5 text-sm font-bold text-white">
+        You're next, please be ready
       </span>
     )
   }

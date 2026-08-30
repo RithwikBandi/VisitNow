@@ -21,7 +21,7 @@ import type { QueueEntry, QueueSource, Session } from '../types/index.js'
  * Falling back to the entry's session keeps every entry countable
  * without needing to re-seed history, and is honest: the session's fee
  * is exactly what that entry would have been charged. */
-function feeFor(entry: QueueEntry, session: Session | undefined): { amount: number; collected: boolean } {
+export function feeFor(entry: QueueEntry, session: Session | undefined): { amount: number; collected: boolean } {
   const amount = entry.hospitalFeeAmount ?? session?.hospitalFeeAmount ?? 0
   // A cancelled entry's fee is still counted as collected if its status
   // says PAID — this prototype has no refund model (edge case #31), so
@@ -193,6 +193,58 @@ export function computeRevenueReport(): RevenueReport {
     byDoctor: [...byDoctor.values()]
       .map(({ clinicSet, ...rest }) => ({ ...rest, clinicNames: [...clinicSet] }))
       .sort((a, b) => b.clinicFeeCollected - a.clinicFeeCollected),
+    byDay: [...byDay.values()].sort((a, b) => b.date.localeCompare(a.date)),
+    bySource: [...bySource.values()],
+    entries,
+  }
+}
+
+/**
+ * Same report, filtered to one clinic — for a clinic_admin account, who
+ * should never see another tenant's revenue. Deliberately a filter on
+ * the already-computed report rather than a second aggregation path:
+ * `byClinic`/`entries` already carry `clinicId`/`clinicName`, so scoping
+ * is "keep the rows that match," not "recompute totals differently."
+ * `totals` is re-summed from the *filtered* entries rather than read
+ * from the single matching `byClinic` row, so this function stays
+ * correct even if a future caller filters by something byClinic doesn't
+ * already carry (e.g. a date range) without needing a second totals path.
+ */
+export function scopeReportToClinic(report: RevenueReport, clinicId: string): RevenueReport {
+  const byClinic = report.byClinic.filter((r) => r.clinicId === clinicId)
+  const clinicName = byClinic[0]?.clinicName
+  const byDoctor = report.byDoctor.filter((r) => clinicName != null && r.clinicNames.includes(clinicName))
+  const entries = report.entries.filter((r) => clinicName != null && r.clinicName === clinicName)
+
+  const totals = emptyTotals()
+  for (const e of entries) {
+    totals.tokensIssued += 1
+    if (e.clinicFeeCollected) totals.clinicFeeCollected += e.clinicFeeAmount
+    else totals.clinicFeeDue += e.clinicFeeAmount
+    totals.platformFeeCollected += e.platformFeeCollected
+  }
+
+  const byDay = new Map<string, RevenueDayRow>()
+  const bySource = new Map<QueueSource, RevenueSourceRow>()
+  for (const e of entries) {
+    const dayRow = byDay.get(e.date) ?? { date: e.date, ...emptyTotals() }
+    dayRow.tokensIssued += 1
+    if (e.clinicFeeCollected) dayRow.clinicFeeCollected += e.clinicFeeAmount
+    else dayRow.clinicFeeDue += e.clinicFeeAmount
+    dayRow.platformFeeCollected += e.platformFeeCollected
+    byDay.set(e.date, dayRow)
+
+    const sourceRow = bySource.get(e.source) ?? { source: e.source, count: 0, clinicFeeCollected: 0 }
+    sourceRow.count += 1
+    if (e.clinicFeeCollected) sourceRow.clinicFeeCollected += e.clinicFeeAmount
+    bySource.set(e.source, sourceRow)
+  }
+
+  return {
+    generatedAt: report.generatedAt,
+    totals,
+    byClinic,
+    byDoctor,
     byDay: [...byDay.values()].sort((a, b) => b.date.localeCompare(a.date)),
     bySource: [...bySource.values()],
     entries,
