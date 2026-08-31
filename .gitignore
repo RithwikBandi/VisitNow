@@ -6,5 +6,6 @@ dist/
 .DS_Store
 *.log
 
-# Investor materials — kept locally, not published in the repo.
+# Investor/business materials — kept locally, not published in the repo.
 pitch/
+docs/
