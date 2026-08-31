@@ -92,7 +92,7 @@ export async function logout(): Promise<void> {
 /** Where a signed-in account should land right after login, and what
  * every /staff, /doctor, /admin route's guard falls back to. */
 export function homeRouteFor(role: PublicAccount['role']): string {
-  if (role === 'super_admin') return '/admin'
+  if (role === 'super_admin' || role === 'super_admin_staff') return '/admin'
   if (role === 'doctor') return '/doctor'
   return '/staff'
 }

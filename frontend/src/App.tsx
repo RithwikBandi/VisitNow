@@ -3,6 +3,7 @@ import { AdminLayout } from './components/admin/AdminLayout'
 import { AppShell } from './components/patient/AppShell'
 import { RequirePatientAuth } from './components/patient/RequirePatientAuth'
 import { DoctorLayout } from './components/staff/DoctorLayout'
+import { RequirePermission } from './components/staff/RequirePermission'
 import { RequireRole } from './components/staff/RequireRole'
 import { StaffLayout } from './components/staff/StaffLayout'
 import { ActiveVisitPage } from './pages/patient/ActiveVisitPage'
@@ -18,12 +19,17 @@ import { SessionDetailPage } from './pages/patient/SessionDetailPage'
 import { TokenConfirmedPage } from './pages/patient/TokenConfirmedPage'
 import { TokenPaymentPage } from './pages/patient/TokenPaymentPage'
 import { VisitsPage } from './pages/patient/VisitsPage'
+import { CouponsPage } from './pages/admin/CouponsPage'
+import { CrmPage } from './pages/admin/CrmPage'
 import { SuperAdminPage } from './pages/admin/SuperAdminPage'
 import { DoctorDashboardPage } from './pages/doctor/DoctorDashboardPage'
 import { StaffHomePage } from './pages/staff/StaffHomePage'
 import { StaffLoginPage } from './pages/staff/StaffLoginPage'
+import { StaffNotificationsPage } from './pages/staff/StaffNotificationsPage'
 import { StaffQueueConsolePage } from './pages/staff/StaffQueueConsolePage'
+import { StaffRefundsPage } from './pages/staff/StaffRefundsPage'
 import { StaffRevenuePage } from './pages/staff/StaffRevenuePage'
+import { StaffTeamPage } from './pages/staff/StaffTeamPage'
 
 export default function App() {
   return (
@@ -63,14 +69,31 @@ export default function App() {
 
       <Route path="/staff/login" element={<StaffLoginPage />} />
 
-      {/* clinic_admin + clinic_staff — the operational console. Revenue
-          nav is hidden for clinic_staff by StaffLayout itself; the
+      {/* hospital_admin + hospital_staff — the operational console. Revenue
+          nav is hidden for hospital_staff by StaffLayout itself; the
           backend also 403s that call for them regardless (defense in
           depth, not duplicated trust). */}
-      <Route element={<RequireRole allow={['clinic_admin', 'clinic_staff']} />}>
+      <Route element={<RequireRole allow={['hospital_admin', 'hospital_staff']} />}>
         <Route element={<StaffLayout />}>
           <Route path="/staff" element={<StaffHomePage />} />
-          <Route path="/staff/revenue" element={<StaffRevenuePage />} />
+          {/* Revenue is a "payments" capability — a hospital_staff account
+              only reaches it if actually granted that module (backend
+              also enforces this on /api/staff/revenue itself). */}
+          <Route element={<RequirePermission module="payments" />}>
+            <Route path="/staff/revenue" element={<StaffRevenuePage />} />
+          </Route>
+          <Route element={<RequirePermission module="refunds" />}>
+            <Route path="/staff/refunds" element={<StaffRefundsPage />} />
+          </Route>
+          <Route element={<RequirePermission module="notifications" />}>
+            <Route path="/staff/notifications" element={<StaffNotificationsPage />} />
+          </Route>
+          {/* Staff management is never delegable — hospital_admin only,
+              even for a hospital_staff account holding every module,
+              same anti-escalation shape as platform staff management. */}
+          <Route element={<RequireRole allow={['hospital_admin']} />}>
+            <Route path="/staff/team" element={<StaffTeamPage />} />
+          </Route>
           <Route path="/staff/sessions/:sessionId" element={<StaffQueueConsolePage />} />
         </Route>
       </Route>
@@ -85,12 +108,28 @@ export default function App() {
         </Route>
       </Route>
 
-      {/* super_admin — tenant onboarding + the same revenue report
-          component, which the backend returns unscoped for this role. */}
-      <Route element={<RequireRole allow={['super_admin']} />}>
+      {/* super_admin + super_admin_staff — tenant onboarding is
+          super_admin-only inside SuperAdminPage itself (see its own
+          permission checks); revenue needs the "payments" module for a
+          super_admin_staff account, same as the hospital side. */}
+      <Route element={<RequireRole allow={['super_admin', 'super_admin_staff']} />}>
         <Route element={<AdminLayout />}>
           <Route path="/admin" element={<SuperAdminPage />} />
-          <Route path="/admin/revenue" element={<StaffRevenuePage />} />
+          <Route element={<RequirePermission module="payments" />}>
+            <Route path="/admin/revenue" element={<StaffRevenuePage />} />
+          </Route>
+          <Route element={<RequirePermission module="refunds" />}>
+            <Route path="/admin/refunds" element={<StaffRefundsPage />} />
+          </Route>
+          <Route element={<RequirePermission module="coupons" />}>
+            <Route path="/admin/coupons" element={<CouponsPage />} />
+          </Route>
+          <Route element={<RequirePermission module="crm" />}>
+            <Route path="/admin/patients" element={<CrmPage />} />
+          </Route>
+          <Route element={<RequirePermission module="notifications" />}>
+            <Route path="/admin/notifications" element={<StaffNotificationsPage />} />
+          </Route>
         </Route>
       </Route>
 

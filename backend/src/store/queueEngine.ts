@@ -13,6 +13,7 @@ import {
   type QueueStatus,
   type Session,
 } from '../types/index.js'
+import type { Coupon } from '../types/coupon.js'
 import { nextId, queueEntries, queueEntriesForSession, sessions } from './store.js'
 
 export class QueueEngineError extends Error {
@@ -103,13 +104,58 @@ export function findByVerificationCode(sessionId: string, code: string): QueueEn
   )
 }
 
+/**
+ * The real discount math a coupon produces against one specific
+ * session — called both by the public /coupons/validate preview and,
+ * independently, by generateToken itself when the token is actually
+ * created, so a client-computed total is never trusted as the real
+ * charge (the same "server recomputes the real number" rule
+ * Session.hospitalFeeAmount's own snapshot logic already follows).
+ * Throws if the coupon can't be used here at all (inactive, maxed out,
+ * wrong clinic) — a normal, expected outcome for a mistyped/expired
+ * code, same error-shape convention as the rest of this file.
+ */
+export function computeDiscount(coupon: Coupon, session: Session): { hospitalDiscount: number; platformDiscount: number; totalDiscount: number } {
+  if (!coupon.active) throw new QueueEngineError('This coupon is no longer active.')
+  if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
+    throw new QueueEngineError('This coupon has reached its usage limit.')
+  }
+  if (coupon.scope === 'CLINIC' && coupon.clinicId !== session.clinicId) {
+    throw new QueueEngineError("This coupon isn't valid for this clinic.")
+  }
+
+  const hospitalFee = session.hospitalFeeAmount
+  const platformFee = PLATFORM_FEE_INR
+  let hospitalDiscount = 0
+  let platformDiscount = 0
+
+  if (coupon.discountType === 'PERCENT') {
+    if (coupon.appliesTo === 'HOSPITAL_FEE' || coupon.appliesTo === 'BOTH') hospitalDiscount = Math.round(hospitalFee * (coupon.discountValue / 100))
+    if (coupon.appliesTo === 'PLATFORM_FEE' || coupon.appliesTo === 'BOTH') platformDiscount = Math.round(platformFee * (coupon.discountValue / 100))
+  } else {
+    // FLAT — spent against hospital fee first, any remainder against
+    // platform fee, so a "BOTH" flat coupon reads as one rebate off the
+    // total rather than doubling the same amount off each fee.
+    let remaining = coupon.discountValue
+    if (coupon.appliesTo === 'HOSPITAL_FEE' || coupon.appliesTo === 'BOTH') {
+      hospitalDiscount = Math.min(hospitalFee, remaining)
+      remaining -= hospitalDiscount
+    }
+    if (coupon.appliesTo === 'PLATFORM_FEE' || coupon.appliesTo === 'BOTH') {
+      platformDiscount = Math.min(platformFee, remaining)
+    }
+  }
+
+  return { hospitalDiscount, platformDiscount, totalDiscount: hospitalDiscount + platformDiscount }
+}
+
 export function generateToken(
   sessionId: string,
-  input: { source: QueueEntry['source']; patientName: string; patientPhone?: string; paymentMethod?: PaymentMethod },
+  input: { source: QueueEntry['source']; patientName: string; patientPhone?: string; paymentMethod?: PaymentMethod; couponCode?: string; coupon?: Coupon },
 ): QueueEntry {
   const session = getSessionOrThrow(sessionId)
   if (session.doctorStatus === 'closed') {
-    throw new QueueEngineError('This session is closed — new tokens are not being issued.')
+    throw new QueueEngineError('This session is closed. New tokens are not being issued.')
   }
 
   const isOnline = input.source === 'online'
@@ -155,6 +201,22 @@ export function generateToken(
     // integration would need to do differently.
     entry.platformFeeStatus = 'PAID'
     entry.verificationCode = generateVerificationCode(sessionId)
+
+    // Coupons are an online-only, VisitNow-payment concept — a walk-in
+    // never goes through this step to redeem one against (matches
+    // paymentMethod's own online-only scoping just above). The route
+    // resolves the coupon by code and passes the object in; this
+    // function re-derives the real discount via computeDiscount
+    // (never trusts a client-supplied amount) and applies it to the
+    // fee snapshot it's already taking.
+    if (input.coupon) {
+      const discount = computeDiscount(input.coupon, session)
+      entry.hospitalFeeAmount = Math.max(0, entry.hospitalFeeAmount - discount.hospitalDiscount)
+      entry.platformFeeAmount = Math.max(0, entry.platformFeeAmount - discount.platformDiscount)
+      entry.couponCode = input.coupon.code
+      entry.discountAmount = discount.totalDiscount
+      input.coupon.usedCount += 1
+    }
   }
 
   session.nextTokenNumber += 1
@@ -181,7 +243,7 @@ function transition(entry: QueueEntry, to: QueueStatus): void {
 export function callNext(sessionId: string): { completed: QueueEntry | null; called: QueueEntry | null } {
   const session = getSessionOrThrow(sessionId)
   if (session.doctorStatus === 'paused' || session.doctorStatus === 'closed') {
-    throw new QueueEngineError(`Queue is ${session.doctorStatus} — resume it before calling the next patient.`)
+    throw new QueueEngineError(`Queue is ${session.doctorStatus}. Resume it before calling the next patient.`)
   }
 
   const current = fullQueue(sessionId).find((e) => e.status === 'called' || e.status === 'in_progress')
@@ -235,11 +297,65 @@ export function cancelEntry(entryId: string): QueueEntry {
   return entry
 }
 
+/** The front-desk "cash received" action — closes a real, confirmed gap:
+ * before this, hospitalFeeStatus was set once at token creation ('DUE'
+ * for a PAY_AT_HOSPITAL entry) and never updated again anywhere, so
+ * there was no way for reception to ever mark that fee as actually
+ * collected in person. Only valid for a still-DUE PAY_AT_HOSPITAL
+ * entry — an ONLINE entry's hospitalFeeStatus is already 'PAID' at
+ * creation, and there's nothing to "collect" for offline/appointment
+ * entries either (their fee is assumed collected at issue time, see
+ * generateToken above). */
+export function collectHospitalFee(entryId: string, collectedBy: string): QueueEntry {
+  const entry = getEntryOrThrow(entryId)
+  if (entry.paymentMethod !== 'PAY_AT_HOSPITAL' || entry.hospitalFeeStatus !== 'DUE') {
+    throw new QueueEngineError('This token has no pending clinic-fee collection.')
+  }
+  entry.hospitalFeeStatus = 'PAID'
+  entry.hospitalFeeCollectedAt = new Date().toISOString()
+  entry.hospitalFeeCollectedBy = collectedBy
+  return entry
+}
+
+/** Resolves decisions log edge case #31 ("no refund model"). Eligible
+ * only for a cancelled/no-show entry that actually had a fee paid —
+ * refunding a still-waiting token makes no sense (nothing was
+ * collected to give back), and refunding a completed visit isn't a
+ * "cancel" scenario this prototype models. `amount` is clamped to
+ * whatever was actually paid (hospital fee if collected + platform
+ * fee if paid) rather than trusted as-is from the caller — the same
+ * "server computes the real number" rule generateToken's fee snapshot
+ * already follows. Fee *statuses* stay PAID (historically true);
+ * refundStatus layers on top rather than reopening them to DUE. */
+export function issueRefund(entryId: string, amount: number | undefined, reason: string | undefined, issuedBy: string): QueueEntry {
+  const entry = getEntryOrThrow(entryId)
+  if (!['cancelled', 'no_show'].includes(entry.status)) {
+    throw new QueueEngineError('Only a cancelled or no-show token can be refunded.')
+  }
+  if (entry.refundStatus === 'REFUNDED') {
+    throw new QueueEngineError('This token has already been refunded.')
+  }
+  const paidHospitalFee = entry.hospitalFeeStatus === 'PAID' ? (entry.hospitalFeeAmount ?? 0) : 0
+  const paidPlatformFee = entry.platformFeeStatus === 'PAID' ? (entry.platformFeeAmount ?? 0) : 0
+  const maxRefundable = paidHospitalFee + paidPlatformFee
+  if (maxRefundable <= 0) {
+    throw new QueueEngineError('Nothing was collected on this token, so there is nothing to refund.')
+  }
+  const refundAmount = Math.min(Math.max(0, amount ?? maxRefundable), maxRefundable)
+  entry.refundStatus = 'REFUNDED'
+  entry.refundAmount = refundAmount
+  entry.refundedAt = new Date().toISOString()
+  entry.refundedBy = issuedBy
+  entry.refundReason = reason
+  return entry
+}
+
 /** Staff-only — see the module docstring in types/index.ts and the
- * brief's §8: a patient can never set their own priority. There's no
- * staff-account system in this prototype to actually gate that (see
- * §24 — not the focus), so `assignedBy` is a free-text name from the
- * hospital-panel UI, not an authenticated identity yet. */
+ * brief's §8: a patient can never set their own priority. `assignedBy`
+ * now defaults to the authenticated account's own display name at the
+ * route level (see queueEntries.ts) rather than trusting a client-
+ * supplied string, closing the gap this comment used to flag before
+ * real staff accounts existed. */
 export function setPriority(entryId: string, priority: QueuePriority, assignedBy: string): QueueEntry {
   const entry = getEntryOrThrow(entryId)
   if (entry.status !== 'waiting') {

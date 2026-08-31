@@ -74,6 +74,18 @@ export interface QueueEntry {
   platformFeeStatus?: FeeStatus
   hospitalFeeStatus?: FeeStatus
   verificationCode?: string
+
+  hospitalFeeCollectedAt?: string
+  hospitalFeeCollectedBy?: string
+
+  refundStatus?: 'REFUNDED'
+  refundAmount?: number
+  refundedAt?: string
+  refundedBy?: string
+  refundReason?: string
+
+  couponCode?: string
+  discountAmount?: number
 }
 
 export type AppointmentStatus = 'scheduled' | 'converted' | 'cancelled'

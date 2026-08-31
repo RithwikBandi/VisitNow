@@ -41,7 +41,7 @@ catalogRouter.get('/doctors/:id', (req, res) => {
 /** Every session, each with its clinic/doctor already attached — this is
  * what the patient home screen's "today's doctors" list renders from
  * directly, no N+1 client-side lookups. Optional `clinicId` filter is
- * for StaffHomePage's session picker: a clinic_admin/clinic_staff
+ * for StaffHomePage's session picker: a hospital_admin/hospital_staff
  * account shouldn't see another clinic's sessions in their own picker
  * (the write actions are already server-enforced regardless — see
  * sessions.ts's requireOwnedSession — this filter is about not showing

@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { getCachedAccount } from '../../lib/auth'
+import { getCachedAccount, homeRouteFor } from '../../lib/auth'
 import type { AccountRole } from '../../lib/accountTypes'
 
 /** Gates a route group to signed-in accounts whose role is in `allow` —
@@ -17,8 +17,7 @@ export function RequireRole({ allow }: { allow: AccountRole[] }) {
     return <Navigate to="/staff/login" replace state={{ from: location.pathname }} />
   }
   if (!allow.includes(account.role)) {
-    const home = account.role === 'super_admin' ? '/admin' : account.role === 'doctor' ? '/doctor' : '/staff'
-    return <Navigate to={home} replace />
+    return <Navigate to={homeRouteFor(account.role)} replace />
   }
   return <Outlet />
 }

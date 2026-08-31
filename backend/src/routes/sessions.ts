@@ -3,8 +3,8 @@
  * param, the one place "unified queue" actually shows up in the API
  * surface), calling next, and setting doctor status. */
 import { Router, type NextFunction, type Request, type Response } from 'express'
-import { clinics, doctors, sessions } from '../store/store.js'
-import { AuthError, assertCanActOnSession } from '../store/authEngine.js'
+import { clinics, couponByCode, doctors, sessions } from '../store/store.js'
+import { AuthError, assertCanActOnSession, assertHasPermission } from '../store/authEngine.js'
 import { requireAuth } from '../middleware/auth.js'
 import {
   QueueEngineError,
@@ -49,6 +49,23 @@ function requireOwnedSession(req: Request, res: Response): boolean {
   return true
 }
 
+/** requireOwnedSession plus a module check — for staff-only session
+ * actions where ownership alone isn't enough (a permission-scoped
+ * hospital_staff still needs the specific module granted). */
+function requireOwnedSessionWithPermission(req: Request, res: Response, module: string): boolean {
+  if (!requireOwnedSession(req, res)) return false
+  try {
+    assertHasPermission(req.account!, module)
+  } catch (err) {
+    if (err instanceof AuthError) {
+      res.status(err.status).json({ error: err.message })
+      return false
+    }
+    throw err
+  }
+  return true
+}
+
 sessionsRouter.get('/sessions/:id', (req, res) => {
   const session = sessions.get(req.params.id)
   if (!session) return res.status(404).json({ error: 'No such session.' })
@@ -76,7 +93,7 @@ function requireAuthForOfflineToken(req: Request, res: Response, next: NextFunct
   next()
 }
 sessionsRouter.post('/sessions/:id/token', requireAuthForOfflineToken, (req, res) => {
-  const { source, patientName, patientPhone, paymentMethod } = req.body ?? {}
+  const { source, patientName, patientPhone, paymentMethod, couponCode } = req.body ?? {}
   if (source !== 'online' && source !== 'offline') {
     return res.status(422).json({ error: "source must be 'online' or 'offline'." })
   }
@@ -86,9 +103,21 @@ sessionsRouter.post('/sessions/:id/token', requireAuthForOfflineToken, (req, res
   if (source === 'online' && paymentMethod !== 'ONLINE' && paymentMethod !== 'PAY_AT_HOSPITAL') {
     return res.status(422).json({ error: "paymentMethod must be 'ONLINE' or 'PAY_AT_HOSPITAL' for an online token." })
   }
-  if (source === 'offline' && !requireOwnedSession(req, res)) return
+  if (source === 'offline' && !requireOwnedSessionWithPermission(req, res, 'tokens')) return
+
+  // Re-resolved by code here, not trusted from the client as a Coupon
+  // object — the same "server is the source of truth" rule as the fee
+  // amounts themselves. A bad/expired code fails the whole request
+  // rather than silently charging full price, so a patient isn't
+  // surprised at the confirmation screen.
+  let coupon
+  if (source === 'online' && typeof couponCode === 'string' && couponCode.trim()) {
+    coupon = couponByCode(couponCode)
+    if (!coupon) return res.status(422).json({ error: 'Invalid coupon code.' })
+  }
+
   try {
-    const entry = generateToken(paramId(req), { source, patientName: patientName.trim(), patientPhone, paymentMethod })
+    const entry = generateToken(paramId(req), { source, patientName: patientName.trim(), patientPhone, paymentMethod, coupon })
     res.status(201).json({ entry })
   } catch (err) {
     if (err instanceof QueueEngineError) return res.status(err.status).json({ error: err.message })
@@ -100,7 +129,7 @@ sessionsRouter.post('/sessions/:id/token', requireAuthForOfflineToken, (req, res
  * doc comment. `?code=1234` rather than a body since this is a read,
  * not a mutation. */
 sessionsRouter.get('/sessions/:id/verify', requireAuth, (req, res) => {
-  if (!requireOwnedSession(req, res)) return
+  if (!requireOwnedSessionWithPermission(req, res, 'tokens')) return
   const code = typeof req.query.code === 'string' ? req.query.code : ''
   if (!/^\d{4}$/.test(code)) {
     return res.status(422).json({ error: 'code must be a 4-digit string.' })
@@ -111,7 +140,7 @@ sessionsRouter.get('/sessions/:id/verify', requireAuth, (req, res) => {
 })
 
 sessionsRouter.post('/sessions/:id/call-next', requireAuth, (req, res) => {
-  if (!requireOwnedSession(req, res)) return
+  if (!requireOwnedSessionWithPermission(req, res, 'queue')) return
   try {
     const result = callNext(paramId(req))
     res.json(result)
@@ -122,7 +151,7 @@ sessionsRouter.post('/sessions/:id/call-next', requireAuth, (req, res) => {
 })
 
 sessionsRouter.post('/sessions/:id/doctor-status', requireAuth, (req, res) => {
-  if (!requireOwnedSession(req, res)) return
+  if (!requireOwnedSessionWithPermission(req, res, 'queue')) return
   const { status, delayMinutes } = req.body ?? {}
   const valid = ['available', 'delayed', 'paused', 'closed']
   if (!valid.includes(status)) {

@@ -1,10 +1,15 @@
 import { LogOut, ShieldCheck } from 'lucide-react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { logout } from '../../lib/auth'
+import { NotificationBell } from '../staff/NotificationBell'
+import { hasPermission } from '../staff/RequirePermission'
 
-const NAV_ITEMS = [
+const ALL_NAV_ITEMS: { to: string; label: string; end: boolean; module?: string }[] = [
   { to: '/admin', label: 'Tenants', end: true },
-  { to: '/admin/revenue', label: 'Platform revenue', end: false },
+  { to: '/admin/revenue', label: 'Platform revenue', end: false, module: 'payments' },
+  { to: '/admin/refunds', label: 'Refunds', end: false, module: 'refunds' },
+  { to: '/admin/coupons', label: 'Coupons', end: false, module: 'coupons' },
+  { to: '/admin/patients', label: 'Patients', end: false, module: 'crm' },
 ]
 
 /** The super_admin shell — platform ops, not a clinic's own console.
@@ -13,6 +18,7 @@ const NAV_ITEMS = [
  * as just another clinic's staff console. */
 export function AdminLayout() {
   const navigate = useNavigate()
+  const navItems = ALL_NAV_ITEMS.filter((i) => !i.module || hasPermission(i.module))
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--color-bg)]">
@@ -27,7 +33,7 @@ export function AdminLayout() {
               </span>
             </Link>
             <nav className="hidden items-center gap-1 sm:flex">
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -41,16 +47,19 @@ export function AdminLayout() {
               ))}
             </nav>
           </div>
-          <button
-            onClick={async () => {
-              await logout()
-              navigate('/staff/login', { replace: true })
-            }}
-            className="press-scale flex items-center gap-1.5 text-xs font-semibold text-white/60 hover:text-white"
-          >
-            <LogOut size={13} aria-hidden="true" />
-            Sign out
-          </button>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <button
+              onClick={async () => {
+                await logout()
+                navigate('/staff/login', { replace: true })
+              }}
+              className="press-scale flex items-center gap-1.5 text-xs font-semibold text-white/60 hover:text-white"
+            >
+              <LogOut size={13} aria-hidden="true" />
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 py-6 sm:px-8">

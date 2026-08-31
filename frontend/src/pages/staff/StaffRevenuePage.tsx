@@ -1,8 +1,11 @@
 import { Download, IndianRupee, Printer, Ticket, TrendingUp } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { RevenueTrendChart } from '../../components/charts/RevenueTrendChart'
+import { TokensPerDayChart } from '../../components/charts/TokensPerDayChart'
 import { StatCard } from '../../components/staff/StatCard'
 import { fetchRevenueReport } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
+import { getCachedAccount } from '../../lib/auth'
 import type { RevenueClinicRow, RevenueDoctorRow, RevenueSourceRow } from '../../lib/types'
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -40,7 +43,22 @@ function downloadCsv(filename: string, rows: (string | number)[][]): void {
  * (a dedicated print stylesheet below, not a screenshot-of-the-screen).
  */
 export function StaffRevenuePage() {
-  const { data, loading, error } = usePolling(fetchRevenueReport, 20_000)
+  const account = getCachedAccount()
+  const isPlatform = account?.role === 'super_admin' || account?.role === 'super_admin_staff'
+  const [city, setCity] = useState('')
+  const [cityOptions, setCityOptions] = useState<string[]>([])
+  const { data, loading, error } = usePolling(() => fetchRevenueReport(city || undefined), 20_000, city)
+
+  // Captured from the unfiltered response only — once a city filter is
+  // applied, byClinic narrows to just that city, so this is the one
+  // moment the full option list is visible. "select a location and see
+  // data for that location," reusing data already on the page rather
+  // than a second endpoint just to list cities.
+  useEffect(() => {
+    if (!city && data) {
+      setCityOptions([...new Set(data.byClinic.map((c) => c.city))].sort())
+    }
+  }, [city, data])
 
   const csvRows = useMemo(() => {
     if (!data) return []
@@ -80,7 +98,21 @@ export function StaffRevenuePage() {
           <h1 className="font-display text-2xl font-semibold text-[var(--color-text)] sm:text-[28px]">Revenue &amp; analytics</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">Every clinic and platform fee this demo has recorded, in real time.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isPlatform && cityOptions.length > 1 && (
+            <select
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className="rounded-[var(--radius-md)] border border-black/10 bg-white px-3 py-2 text-[13px] font-bold text-[var(--color-text)] focus:border-[var(--color-brand-400)] focus:outline-none"
+            >
+              <option value="">All locations</option>
+              {cityOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             onClick={() => downloadCsv(`visitnow-revenue-${new Date().toISOString().slice(0, 10)}.csv`, csvRows)}
             className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-black/10 bg-white px-3.5 py-2 text-[13px] font-bold text-[var(--color-text)] transition-colors hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-700)]"
@@ -113,8 +145,29 @@ export function StaffRevenuePage() {
         <StatCard icon={IndianRupee} label="VisitNow platform fees" value={inr(data.totals.platformFeeCollected)} />
       </div>
 
+      {/* byDay comes back newest-first (see computeRevenueReport) — every
+          other consumer wants that, a trend chart wants oldest-first, so
+          reverse it here rather than changing the API's own order for
+          this one caller. */}
+      <div className="grid grid-cols-1 gap-4 print:hidden lg:grid-cols-2">
+        <div className="rounded-[var(--radius-lg)] border border-black/5 bg-white p-5">
+          <h2 className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">
+            <TrendingUp size={13} aria-hidden="true" />
+            Clinic fees by day
+          </h2>
+          <RevenueTrendChart data={[...data.byDay].reverse().map((d) => ({ date: d.date, value: d.clinicFeeCollected }))} formatValue={inr} />
+        </div>
+        <div className="rounded-[var(--radius-lg)] border border-black/5 bg-white p-5">
+          <h2 className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-faint)]">
+            <Ticket size={13} aria-hidden="true" />
+            Tokens by day
+          </h2>
+          <TokensPerDayChart data={[...data.byDay].reverse().map((d) => ({ date: d.date, value: d.tokensIssued }))} />
+        </div>
+      </div>
+
       {/* "By clinic" is meaningless (a table with one row) for a
-          clinic_admin, whose report is already scoped to their one
+          hospital_admin, whose report is already scoped to their one
           clinic server-side — hide it rather than show a table proving
           nothing. A super_admin's unscoped report still has several
           rows, so it stays for them. */}

@@ -1,7 +1,11 @@
-import { AlertOctagon, Check, PlayCircle, RotateCcw, SkipForward, UserX, XCircle, Zap } from 'lucide-react'
+import { AlertOctagon, Banknote, Check, PlayCircle, ReceiptText, RotateCcw, SkipForward, UserX, XCircle, Zap } from 'lucide-react'
+import { useState } from 'react'
 import { PriorityBadge, SourceBadge, StatusBadge } from '../ui/Badge'
+import { RefundModal } from './RefundModal'
+import { hasPermission } from './RequirePermission'
 import {
   cancelEntry,
+  collectHospitalFee,
   completeEntry,
   markNoShow,
   requeueEntry,
@@ -20,13 +24,24 @@ interface QueueRowProps {
   onError: (message: string) => void
 }
 
+const TERMINAL: readonly string[] = ['completed', 'cancelled', 'no_show']
+
 /** One queue entry, with whichever actions actually make sense for its
  * current status — a waiting token can be skipped or escalated, a called
  * one can be started or marked a no-show, and so on. Keeping the action
  * set contextual (rather than showing every possible button on every
  * row, disabled when irrelevant) is what makes this read as an
- * operations console instead of a generic CRUD table. */
+ * operations console instead of a generic CRUD table.
+ *
+ * "Collect fee" and "Refund" are permission-gated separately from the
+ * queue actions above (hasPermission('payments')/('refunds')) — a front-
+ * desk account with only queue/tokens never sees either, matching the
+ * seeded "Sunrise Front Desk" vs. "Sunrise Payments Desk" split. The
+ * backend enforces the same boundary on both routes regardless of what
+ * this component shows. */
 export function QueueRow({ entry, assignedBy, disabled, onChanged, onError }: QueueRowProps) {
+  const [refunding, setRefunding] = useState(false)
+
   const run = async (fn: () => Promise<unknown>) => {
     try {
       await fn()
@@ -39,6 +54,12 @@ export function QueueRow({ entry, assignedBy, disabled, onChanged, onError }: Qu
   const priorityCycle: Record<QueuePriority, QueuePriority> = { regular: 'priority', priority: 'emergency', emergency: 'regular' }
   const nextPriority = priorityCycle[entry.priority]
 
+  const canRunQueue = hasPermission('queue')
+  const canCollectFee = entry.paymentMethod === 'PAY_AT_HOSPITAL' && entry.hospitalFeeStatus === 'DUE' && hasPermission('payments')
+  const paidSomething = entry.hospitalFeeStatus === 'PAID' || entry.platformFeeStatus === 'PAID'
+  const canRefund =
+    ['cancelled', 'no_show'].includes(entry.status) && paidSomething && entry.refundStatus !== 'REFUNDED' && hasPermission('refunds')
+
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
       <span className="w-10 shrink-0 font-display text-xl font-semibold text-[var(--color-text)]">{entry.tokenNumber}</span>
@@ -48,16 +69,28 @@ export function QueueRow({ entry, assignedBy, disabled, onChanged, onError }: Qu
         {entry.priorityAssignedBy && (
           <p className="text-[11px] text-[var(--color-text-faint)]">Priority set by {entry.priorityAssignedBy}</p>
         )}
+        {entry.refundStatus === 'REFUNDED' && (
+          <p className="text-[11px] font-semibold text-[var(--color-warning)]">₹{entry.refundAmount} refunded by {entry.refundedBy}</p>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
         <SourceBadge source={entry.source} />
         <PriorityBadge priority={entry.priority} />
+        {!TERMINAL.includes(entry.status) && entry.paymentMethod === 'PAY_AT_HOSPITAL' && (
+          <span
+            className={`inline-flex items-center rounded-[var(--radius-badge)] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] ${
+              entry.hospitalFeeStatus === 'PAID' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
+            }`}
+          >
+            {entry.hospitalFeeStatus === 'PAID' ? 'Fee paid' : 'Fee due'}
+          </span>
+        )}
         <StatusBadge status={entry.status} />
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        {entry.status === 'waiting' && (
+        {canRunQueue && entry.status === 'waiting' && (
           <>
             <IconAction
               label={`Set ${nextPriority}`}
@@ -69,22 +102,40 @@ export function QueueRow({ entry, assignedBy, disabled, onChanged, onError }: Qu
             <IconAction label="Cancel" icon={<XCircle size={14} />} disabled={disabled} onClick={() => run(() => cancelEntry(entry.id))} tone="danger" />
           </>
         )}
-        {entry.status === 'called' && (
+        {canRunQueue && entry.status === 'called' && (
           <>
             <IconAction label="Start" icon={<PlayCircle size={14} />} disabled={disabled} onClick={() => run(() => startConsultation(entry.id))} />
             <IconAction label="No-show" icon={<UserX size={14} />} disabled={disabled} onClick={() => run(() => markNoShow(entry.id))} tone="danger" />
           </>
         )}
-        {entry.status === 'in_progress' && (
+        {canRunQueue && entry.status === 'in_progress' && (
           <IconAction label="Complete" icon={<Check size={14} />} disabled={disabled} onClick={() => run(() => completeEntry(entry.id))} tone="success" />
         )}
-        {entry.status === 'skipped' && (
+        {canRunQueue && entry.status === 'skipped' && (
           <IconAction label="Re-queue" icon={<RotateCcw size={14} />} disabled={disabled} onClick={() => run(() => requeueEntry(entry.id))} />
+        )}
+        {canCollectFee && (
+          <IconAction label="Collect fee" icon={<Banknote size={14} />} disabled={disabled} onClick={() => run(() => collectHospitalFee(entry.id))} tone="success" />
+        )}
+        {canRefund && (
+          <IconAction label="Refund" icon={<ReceiptText size={14} />} disabled={disabled} onClick={() => setRefunding(true)} tone="danger" />
         )}
         {entry.priority === 'emergency' && entry.status === 'waiting' && (
           <AlertOctagon size={15} className="ml-1 text-[var(--color-danger)]" aria-label="Emergency" />
         )}
       </div>
+
+      {refunding && (
+        <RefundModal
+          entry={entry}
+          onClose={() => setRefunding(false)}
+          onDone={() => {
+            setRefunding(false)
+            onChanged()
+          }}
+          onError={onError}
+        />
+      )}
     </div>
   )
 }
@@ -114,7 +165,7 @@ function IconAction({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${toneClass}`}
+      className={`press-scale flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1.5 text-xs font-semibold disabled:opacity-40 ${toneClass}`}
     >
       {icon}
       <span className="hidden sm:inline">{label}</span>

@@ -3,14 +3,17 @@
  * "track my token" read. */
 import { Router, type Request, type Response } from 'express'
 import { clinics, doctors, queueEntries, sessions } from '../store/store.js'
-import { assertCanActOnEntry } from '../store/authEngine.js'
+import { assertCanActOnEntry, assertHasPermission, AuthError } from '../store/authEngine.js'
 import { requireAuth } from '../middleware/auth.js'
+import { emit } from '../store/notify.js'
 import type { QueueEntry } from '../types/index.js'
 import {
   QueueEngineError,
   cancelEntry,
+  collectHospitalFee,
   completeEntry,
   estimateWait,
+  issueRefund,
   markNoShow,
   requeueEntry,
   setPriority,
@@ -87,34 +90,102 @@ queueEntriesRouter.get('/queue-entries/:id', (req, res) => {
 // have no accounts to authenticate (unchanged, out of scope — see the
 // multi-tenant auth plan's non-goals).
 
+/** Wraps requireOwnedEntry with the 'queue' module check — every entry-
+ * action route below needs both: ownership (whose entry is this) and
+ * capability (were you granted the queue module — always true for
+ * hospital_admin/super_admin/a doctor acting on their own session, only
+ * true for hospital_staff/super_admin_staff if actually granted it). */
+function requireOwnedEntryWithQueue(req: Request, res: Response): QueueEntry | undefined {
+  const entry = requireOwnedEntry(req, res)
+  if (!entry) return undefined
+  try {
+    assertHasPermission(req.account!, 'queue')
+  } catch (err) {
+    if (err instanceof AuthError) {
+      res.status(err.status).json({ error: err.message })
+      return undefined
+    }
+    throw err
+  }
+  return entry
+}
+
 queueEntriesRouter.post('/queue-entries/:id/start', requireAuth, (req, res) => {
-  if (!requireOwnedEntry(req, res)) return
+  if (!requireOwnedEntryWithQueue(req, res)) return
   const result = guard(res, () => startConsultation(paramId(req)))
   if (result) res.json({ entry: result })
 })
 
 queueEntriesRouter.post('/queue-entries/:id/complete', requireAuth, (req, res) => {
-  if (!requireOwnedEntry(req, res)) return
+  if (!requireOwnedEntryWithQueue(req, res)) return
   const result = guard(res, () => completeEntry(paramId(req)))
   if (result) res.json({ entry: result })
 })
 
 queueEntriesRouter.post('/queue-entries/:id/skip', requireAuth, (req, res) => {
-  if (!requireOwnedEntry(req, res)) return
+  if (!requireOwnedEntryWithQueue(req, res)) return
   const result = guard(res, () => skipEntry(paramId(req)))
   if (result) res.json({ entry: result })
 })
 
 queueEntriesRouter.post('/queue-entries/:id/requeue', requireAuth, (req, res) => {
-  if (!requireOwnedEntry(req, res)) return
+  if (!requireOwnedEntryWithQueue(req, res)) return
   const result = guard(res, () => requeueEntry(paramId(req)))
   if (result) res.json({ entry: result })
 })
 
 queueEntriesRouter.post('/queue-entries/:id/no-show', requireAuth, (req, res) => {
-  if (!requireOwnedEntry(req, res)) return
+  if (!requireOwnedEntryWithQueue(req, res)) return
   const result = guard(res, () => markNoShow(paramId(req)))
   if (result) res.json({ entry: result })
+})
+
+/** Front desk's "cash received" action — see queueEngine.collectHospitalFee
+ * for what this actually closes (a real, previously-unfillable gap).
+ * Gated on the 'payments' module, not 'queue' — a reception account
+ * with only queue/tokens (like the seeded Sunrise front desk) can run
+ * the queue but not touch money; the seeded Sunrise payments desk is
+ * the inverse. */
+queueEntriesRouter.post('/queue-entries/:id/collect-fee', requireAuth, (req, res) => {
+  const entry = requireOwnedEntry(req, res)
+  if (!entry) return
+  try {
+    assertHasPermission(req.account!, 'payments')
+  } catch (err) {
+    if (err instanceof AuthError) return res.status(err.status).json({ error: err.message })
+    throw err
+  }
+  const result = guard(res, () => collectHospitalFee(paramId(req), req.account!.displayName))
+  if (result) res.json({ entry: result })
+})
+
+/** Issuing a refund — gated on 'refunds', separate from 'payments' on
+ * purpose (a platform staffer might be trusted to view/refund without
+ * blanket revenue visibility, matching the seeded "VisitNow Ops —
+ * Payments" account which actually holds both, but the two seeded
+ * hospital_staff accounts show the split: front desk has neither,
+ * payments desk has both). */
+queueEntriesRouter.post('/queue-entries/:id/refund', requireAuth, (req, res) => {
+  const entry = requireOwnedEntry(req, res)
+  if (!entry) return
+  try {
+    assertHasPermission(req.account!, 'refunds')
+  } catch (err) {
+    if (err instanceof AuthError) return res.status(err.status).json({ error: err.message })
+    throw err
+  }
+  const { amount, reason } = req.body ?? {}
+  const result = guard(res, () =>
+    issueRefund(paramId(req), typeof amount === 'number' ? amount : undefined, typeof reason === 'string' ? reason : undefined, req.account!.displayName),
+  )
+  if (result) {
+    const session = sessions.get(result.sessionId)
+    emit('CLINIC', 'refund_issued', `₹${result.refundAmount} refunded for token #${result.tokenNumber}`, {
+      clinicId: session?.clinicId,
+      actorAccountId: req.account!.id,
+    })
+    res.json({ entry: result })
+  }
 })
 
 /** Patient-facing — see the comment above this block. Deliberately no
@@ -125,7 +196,7 @@ queueEntriesRouter.post('/queue-entries/:id/cancel', (req, res) => {
 })
 
 queueEntriesRouter.post('/queue-entries/:id/priority', requireAuth, (req, res) => {
-  const entry = requireOwnedEntry(req, res)
+  const entry = requireOwnedEntryWithQueue(req, res)
   if (!entry) return
   const { priority, assignedBy } = req.body ?? {}
   const valid = ['regular', 'priority', 'emergency']

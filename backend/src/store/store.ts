@@ -11,6 +11,8 @@
  */
 import type { Appointment, Clinic, Doctor, QueueEntry, Session } from '../types/index.js'
 import type { Account, AuthToken } from '../types/account.js'
+import type { Coupon } from '../types/coupon.js'
+import type { NotificationEvent } from '../types/notification.js'
 
 export const clinics = new Map<string, Clinic>()
 export const doctors = new Map<string, Doctor>()
@@ -22,6 +24,8 @@ export const accounts = new Map<string, Account>()
  * string in a Map, not a JWT — proportional to everything else in this
  * file already being an in-memory Map that resets on restart. */
 export const authTokens = new Map<string, AuthToken>()
+export const coupons = new Map<string, Coupon>()
+export const notifications = new Map<string, NotificationEvent>()
 
 const idCounters = new Map<string, number>()
 /** Prefixed, human-scannable ids (e.g. "session-3", "doctor-2") instead
@@ -42,6 +46,8 @@ export function resetStore(): void {
   appointments.clear()
   accounts.clear()
   authTokens.clear()
+  coupons.clear()
+  notifications.clear()
   idCounters.clear()
 }
 
@@ -68,4 +74,11 @@ export function sessionsForClinic(clinicId: string): Session[] {
 export function accountByEmail(email: string): Account | undefined {
   const needle = email.trim().toLowerCase()
   return [...accounts.values()].find((a) => a.email.toLowerCase() === needle)
+}
+
+/** Case-insensitive, same reasoning as accountByEmail — a coupon typed
+ * in the wrong case at checkout shouldn't fail to match. */
+export function couponByCode(code: string): Coupon | undefined {
+  const needle = code.trim().toUpperCase()
+  return [...coupons.values()].find((c) => c.code.toUpperCase() === needle)
 }

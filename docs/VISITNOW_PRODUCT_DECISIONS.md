@@ -956,3 +956,176 @@ model — a hospital chain with multiple physical locations is a real, separate 
 actually needed, not built speculatively now), and no audit log beyond the existing
 `priorityAssignedBy` field (now defaulted from the authenticated account's name rather than a
 client-supplied string). Patients still have no accounts — unchanged, intentionally out of scope.
+
+## 27. Granular module permissions, replacing §26's fixed roles — and real features behind every one
+
+### Situation
+
+Correct product-level pushback on §26's own shape, restated precisely: **super_admin_staff** and
+**hospital_staff** aren't fixed roles at all in a real hospital SaaS — they're accounts an owner
+(super_admin / hospital_admin) creates and then hands a specific *subset* of capabilities from a
+module catalog ("Staff A → Hospitals + Doctors", "Staff B → Payments + Settlements", "Staff C →
+Users + CRM", "Reception Staff → offline patients + appointments + queue", "Payment Staff → cash
+verification + payments"). §26's `clinic_staff` was all-or-nothing — any staff login could do every
+staff-console action, full stop. That's not a granularity gap you patch with more roles; it's the
+wrong model.
+
+The sharper half of the same pushback: role-gated routing without real functionality behind it is
+"static pages built for the name's sake," not a product. Audited before writing anything — grepped
+the whole codebase for coupon/refund/notification/CRM code (none existed) and traced every
+`hospitalFeeStatus` write site (exactly one, at token creation, never updated again). A
+`PAY_AT_HOSPITAL` token's fee could be marked `DUE` and then never, anywhere, marked collected —
+confirmed real, not assumed. That gap, not a hypothetical one, is what "permissions" needed to
+actually gate.
+
+### Decision
+
+**Rename, then rebuild the capability model underneath it.** `clinic_admin`/`clinic_staff` →
+`hospital_admin`/`hospital_staff` (mechanical, 13 files, ~39 occurrences — a rename, not a
+domain-model change; `Clinic`/`Doctor`/`Account.clinicId` keep their existing names). A new
+`super_admin_staff` role sits alongside `super_admin`, mirroring `hospital_staff` alongside
+`hospital_admin`.
+
+`Account` gains `permissions?: string[]` — set only for the two staff roles, never for
+`super_admin`/`hospital_admin` (who hold everything in their scope implicitly, nothing to list).
+Two module catalogs (`PlatformModule`, `HospitalModule` in `backend/src/types/account.ts`, mirrored
+in `frontend/src/lib/accountTypes.ts`):
+
+| Platform (super_admin_staff) | Hospital (hospital_staff) |
+|---|---|
+| hospitals, doctors, payments, settlements, refunds, coupons, users, crm, notifications, reports, system_settings | queue, tokens, appointments, payments, refunds, notifications |
+
+`hasPermission(account, module)` (`backend/src/store/authEngine.ts`) is the single source of truth:
+`super_admin`/`hospital_admin` always pass; `super_admin_staff`/`hospital_staff` need the module in
+their own `permissions`; `doctor` implicitly passes only `'queue'` (a doctor runs their own queue,
+they don't handle cash or generate walk-ins — special-cased explicitly rather than left to fall
+through to `false`, see below). `assertHasPermission`/`requirePermission` (route middleware) enforce
+it server-side; `RequirePermission.tsx`/`hasPermission()` on the frontend hide nav and gate routes
+as a courtesy — the backend re-checks every time regardless.
+
+**Ownership and capability stay two separate checks, never merged**: `assertCanActOnSession`/
+`assertCanActOnEntry` answer "whose clinic/session is this," `assertHasPermission` answers "was this
+account granted this module." A route needing both calls both. `assertCanActOnSession` gained one
+line: `super_admin_staff` bypasses clinic ownership exactly like `super_admin` — a platform role
+scoped by permission, not by clinic (needed for, e.g., a platform refunds-permission staffer acting
+across clinics).
+
+**Anti-escalation, explicit and absolute**: only the real `super_admin` — never `super_admin_staff`,
+even holding the `users` module — can create a platform staff account or edit one's permissions
+(`POST/PATCH /admin/super-staff/...`). The same shape on the hospital side: staff-account creation
+and permission-editing are `hospital_admin`-only, never delegable to `hospital_staff` no matter what
+modules they hold (`StaffTeamPage` is gated with a hard `RequireRole allow={['hospital_admin']}`,
+not a permission check, same as the platform side's own rule). A staff account with the `users`/team
+module could otherwise grant itself more than it was given.
+
+**Six real features, one per module family that had none before:**
+
+- **Fee collection** (`payments`) — the confirmed gap. `collectHospitalFee()` in `queueEngine.ts`,
+  `POST /queue-entries/:id/collect-fee`, a "Collect fee" action in `QueueRow.tsx` shown only for
+  `PAY_AT_HOSPITAL` + `DUE` entries.
+- **Refunds** (`refunds`, both levels) — `refundStatus`/`refundAmount`/`refundedAt`/`refundedBy`/
+  `refundReason` layer on top of the existing fee fields, never flip them back to `DUE` (the money
+  really was collected once — same "separate, never-collapsed statuses" rule §3-4 already
+  established for payments). `issueRefund()`, `POST /queue-entries/:id/refund`, `GET
+  /staff/refunds`, a `RefundModal` + dual-routed `StaffRefundsPage`. Resolves edge case #31 ("no
+  refund model") with a working flow.
+- **Coupons** (`coupons`, platform) — a real `Coupon` entity, `GET /coupons/validate` (public, same
+  trust model as online token creation), full CRUD, no hard delete (retired via `active: false`,
+  matching §10's "nothing is ever deleted"). `computeDiscount()` re-derives the real discount
+  server-side from the coupon + session every time — `generateToken` never trusts a client-computed
+  total, mirroring how fee snapshots already work. `TokenPaymentPage` gets a coupon field with real
+  struck-through pricing once applied.
+- **CRM** (`crm`, platform-only) — `computePatientDirectory()` groups existing `QueueEntry` data by
+  phone number (falling back to name when no phone is on file — an honest, documented imprecision
+  for a prototype with no `Patient` entity, not a bug). Real visit counts, total paid, clinics
+  visited — not an invented ticketing system.
+- **Notifications** (both levels) — a minimal `NotificationEvent` log, one `emit()` called from real
+  event sites only (clinic onboarded, staff/doctor account created, refund issued, coupon created).
+  Deliberately *not* wired to fee collection or ordinary queue moves — those happen constantly and
+  would drown out anything worth a human noticing. `GET /notifications` scoped by role (platform
+  accounts see `PLATFORM`-scope events, hospital accounts see only their own clinic's `CLINIC`-scope
+  events). A `NotificationBell` in the header (its "View all" link is the one route to the full
+  page — deliberately no separate text nav item, the same "icon in the header, not also a tab" shape
+  real consoles use) with a per-account localStorage "seen" timestamp, not a server-side read
+  receipt — proportional to a feed that's already an in-memory log.
+- **Analytics trend upgrade** — `computeRevenueReport()`'s `byDay` already existed and was already
+  returned by three endpoints, just never rendered; the doctor dashboard's four stat cards already
+  summed the same rows a day-grouped `dailyTrend` needed. Both were "expose data already being
+  computed," not new aggregation. Two chart components (`RevenueTrendChart`, `TokensPerDayChart`)
+  built as plain SVG rather than a new dependency for two small charts — straight line segments (a
+  curve between two real points implies values never actually collected), one hue, no dual y-axis,
+  recessive dashed gridlines, a hover tooltip per point instead of every number crammed on at once.
+
+**Permission management UI + location filtering** — the "meta" layer configuring everything above.
+`PermissionEditor.tsx`, one reusable checkbox grid, used in `SuperAdminPage`'s new "Platform staff"
+section (visible only to the actual `super_admin`, never `super_admin_staff`) and the new
+`StaffTeamPage` (`/staff/team`) — which finally gives `createClinicStaff` its first real caller;
+it existed in `lib/api.ts` since §26 with no frontend form ever calling it. Location filtering maps
+to the existing `Clinic.city` field, no new geography: `scopeReportToCity()` mirrors
+`scopeReportToClinic()`'s "filter the already-computed report" shape, a city dropdown on
+`SuperAdminPage` (client-side, from clinics already in the response) and on `/admin/revenue`
+(server-side, `?city=`, since revenue needs the filtered totals, not just a filtered list) —
+matching the role spec's own "select a location and see data for that location."
+
+**Two mistakes caught before shipping, not after:**
+
+1. The first draft of `hasPermission()` returned `false` unconditionally for `doctor`. Adding
+   `requirePermission('queue')` gates to call-next/doctor-status/entry actions would then have
+   locked doctors out of their *own* queue — caught by re-reading what routes doctors actually call
+   before assuming "no permissions array" meant "no access to anything," and fixed with the explicit
+   `doctor` → `'queue'`-only special case above.
+2. `/dashboard/platform` needed a `requireRole('super_admin', 'super_admin_staff')` +
+   `requirePermission('hospitals')` gate. Wrapping the *frontend route* `/admin` itself in the same
+   `RequirePermission` would have created an infinite redirect loop for a `super_admin_staff`
+   account without `hospitals`: their `homeRouteFor` is `/admin`, and `RequirePermission`'s own
+   failure branch also redirects to `homeRouteFor`. Avoided by gating only the backend endpoint and
+   showing a graceful in-page `EmptyState` inside `SuperAdminPage` instead — the same "signed in,
+   just not allowed here" principle §26 already established for `RequireRole`, applied one level
+   more precisely.
+
+A pre-existing gap, found and fixed as a side effect of touching this code, not the headline change:
+`hospital_admin` attaching a login to a doctor (`POST /admin/doctors/:id/account`) had no clinic
+ownership check at all — any `hospital_admin` could grant a login to *any* doctor, regardless of
+whether that doctor practiced at their clinic (a doctor can work multiple clinics). Fixed by
+checking `sessionsForDoctor(doctorId).some(s => s.clinicId === account.clinicId)` before allowing it.
+
+### Prototype behavior
+
+Built and verified backend-first, phase by phase, in the same discipline §26 established: rename →
+permission engine → fee collection → refunds → coupons → CRM + notifications → analytics →
+permission management UI + location filtering, each phase curl-verified for real 200/403 boundaries
+across every role combination (a front-desk account can call-next but 403s on collect-fee; a
+payments-desk account can collect-fee/refund but 403s on call-next; a `super_admin_staff` with
+`hospitals` can onboard clinics but one with only `payments` 403s; a `hospital_staff` account
+403s outright on `/admin/clinics/:id/staff` even for their own clinic, since team management is
+`hospital_admin`-only) before any frontend work started on that phase. `npx tsc -b` clean in both
+`backend/` and `frontend/`, plus a full `npm run build`, after every phase. Every new frontend
+surface screenshotted with Playwright, not just curl-verified: fee collection and refund actions on
+the queue console, coupon redemption with real struck-through pricing, the admin coupons list, the
+CRM directory, the notification bell (badge count, dropdown, "View all") and full notifications page
+scoped correctly per clinic, both new charts including their hover tooltips, the platform-staff
+permission grid actually flipping a checkbox and persisting "Saved," and the location filter
+narrowing both the tenant list and the revenue totals live.
+
+Seed data (`backend/src/store/seed.ts`) extended with a third `super_admin_staff` account
+(`staff.users@visitnow.app`, holding `users`/`crm`/`notifications`/`reports` — the spec's own "Staff
+C → Users + CRM" example made real) and `'notifications'` added to the existing Sunrise front-desk
+account, so every new module has a real, non-`super_admin`/`hospital_admin` login to demo against,
+not just the two owner accounts that could already see everything.
+
+### Production consideration
+
+Same honesty story as every prior section, explicit rather than silent: no real payment-gateway
+refund integration (a ledger flip, same simulated-gateway honesty as `PaymentGatewayModal`), no real
+SMS/push/email (notifications are an in-app, in-memory log only), no real editable system-settings
+store (`system_settings` exists in the module catalog but has no backing UI/store yet — read-only
+over existing constants, not built this round), no real settlement payout (the `settlements` module
+exists in the catalog for the same reason — a future settled/unsettled flag, not a bank transfer, is
+the honest version, not built this round either), no geocoding (location filtering is `Clinic.city`,
+unchanged), no auth-strength changes (still §26's plain-text password comparison and opaque
+in-memory token — this round adds authorization granularity only, not authentication strength), no
+self-service permission editing (only the real `super_admin`/`hospital_admin` ever edits permissions,
+never delegable, by design), no org-above-clinic hierarchy (still 1 clinic = 1 tenant, unchanged from
+§26), coupons have no fraud detection beyond `maxUses` and no per-patient cap (needs patient
+accounts, still out of scope), and CRM is read-only — a directory, not a ticketing/case-management
+system.

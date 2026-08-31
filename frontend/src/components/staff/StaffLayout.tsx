@@ -1,10 +1,25 @@
-import { BarChart3, LogOut, ListChecks } from 'lucide-react'
+import { BarChart3, LogOut, ListChecks, ReceiptText, Users } from 'lucide-react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { getCachedAccount, logout } from '../../lib/auth'
+import { NotificationBell } from './NotificationBell'
+import { hasPermission } from './RequirePermission'
+import type { AccountRole } from '../../lib/accountTypes'
 
-const ALL_NAV_ITEMS = [
+/** `module` is checked with hasPermission — a nav item with none is
+ * always shown (Sessions needs no specific module, just the role gate
+ * RequireRole already applies one level up). `role`, separately, is a
+ * hard role check rather than a permission one — Team is never
+ * delegable to hospital_staff no matter what modules they hold, the
+ * same anti-escalation shape as platform staff management. Notifications
+ * deliberately has no text nav item here — NotificationBell (next to
+ * sign-out) is its one entry point, the same "icon in the header, not
+ * also a tab" shape every real console uses; the bell's "View all" link
+ * is what actually routes to /staff/notifications. */
+const ALL_NAV_ITEMS: { to: string; label: string; icon: typeof ListChecks; end: boolean; module?: string; role?: AccountRole[] }[] = [
   { to: '/staff', label: 'Sessions', icon: ListChecks, end: true },
-  { to: '/staff/revenue', label: 'Revenue', icon: BarChart3, end: false },
+  { to: '/staff/revenue', label: 'Revenue', icon: BarChart3, end: false, module: 'payments' },
+  { to: '/staff/refunds', label: 'Refunds', icon: ReceiptText, end: false, module: 'refunds' },
+  { to: '/staff/team', label: 'Team', icon: Users, end: false, role: ['hospital_admin'] },
 ]
 
 /**
@@ -22,10 +37,13 @@ const ALL_NAV_ITEMS = [
 export function StaffLayout() {
   const navigate = useNavigate()
   const account = getCachedAccount()
-  // clinic_staff is operational-only — no Revenue nav item, and the
-  // backend also 403s that call for this role (see routes/staff.ts), so
-  // this hiding is a courtesy, not the actual enforcement boundary.
-  const navItems = account?.role === 'clinic_staff' ? ALL_NAV_ITEMS.filter((i) => i.to !== '/staff/revenue') : ALL_NAV_ITEMS
+  // Each item needing a specific module only shows if this account was
+  // actually granted it — a Sunrise front-desk account (queue/tokens/
+  // appointments) sees just Sessions, a Sunrise payments-desk account
+  // (payments/refunds) sees Revenue and Refunds too. The backend
+  // enforces the same checks on the routes themselves, so this hiding
+  // is a courtesy, not the actual boundary.
+  const navItems = ALL_NAV_ITEMS.filter((i) => (!i.module || hasPermission(i.module)) && (!i.role || (account && i.role.includes(account.role))))
 
   // Was a hardcoded #F4F2EC cream, a second undocumented "paper" color
   // independent of the design tokens — meant this page didn't pick up
@@ -60,16 +78,19 @@ export function StaffLayout() {
               ))}
             </nav>
           </div>
-          <button
-            onClick={async () => {
-              await logout()
-              navigate('/staff/login', { replace: true })
-            }}
-            className="press-scale flex items-center gap-1.5 text-xs font-semibold text-white/60 hover:text-white"
-          >
-            <LogOut size={13} aria-hidden="true" />
-            Sign out
-          </button>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <button
+              onClick={async () => {
+                await logout()
+                navigate('/staff/login', { replace: true })
+              }}
+              className="press-scale flex items-center gap-1.5 text-xs font-semibold text-white/60 hover:text-white"
+            >
+              <LogOut size={13} aria-hidden="true" />
+              Sign out
+            </button>
+          </div>
         </div>
         <nav className="flex items-center gap-1 overflow-x-auto px-5 pb-2.5 sm:hidden">
           {navItems.map((item) => (

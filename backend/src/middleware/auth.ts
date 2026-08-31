@@ -5,7 +5,7 @@
  * queueEntries.ts. Public patient/catalog GETs never call it. */
 import type { NextFunction, Request, Response } from 'express'
 import type { Account, AccountRole } from '../types/account.js'
-import { accountForToken } from '../store/authEngine.js'
+import { accountForToken, hasPermission } from '../store/authEngine.js'
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -37,6 +37,24 @@ export function requireRole(...roles: AccountRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.account || !roles.includes(req.account.role)) {
       res.status(403).json({ error: `This area requires one of: ${roles.join(', ')}.` })
+      return
+    }
+    next()
+  }
+}
+
+/** Composes after requireAuth — 403s unless the authenticated account
+ * was actually granted `module` (see authEngine.hasPermission for the
+ * exact rule: super_admin/hospital_admin always pass, super_admin_staff/
+ * hospital_staff need the module in their own Account.permissions). Use
+ * this for GET routes that are gated by capability alone; for a write
+ * on a *specific* session/entry, check ownership via
+ * assertCanActOnSession/Entry first and call authEngine.assertHasPermission
+ * inline afterward — the two checks stay separate on purpose. */
+export function requirePermission(module: string) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.account || !hasPermission(req.account, module)) {
+      res.status(403).json({ error: `This area requires the "${module}" permission.` })
       return
     }
     next()

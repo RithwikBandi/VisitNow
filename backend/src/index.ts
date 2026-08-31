@@ -4,7 +4,10 @@ import { adminRouter } from './routes/admin.js'
 import { appointmentsRouter } from './routes/appointments.js'
 import { authRouter } from './routes/auth.js'
 import { catalogRouter } from './routes/catalog.js'
+import { couponsRouter } from './routes/coupons.js'
+import { crmRouter } from './routes/crm.js'
 import { dashboardRouter } from './routes/dashboard.js'
+import { notificationsRouter } from './routes/notifications.js'
 import { queueEntriesRouter } from './routes/queueEntries.js'
 import { sessionsRouter } from './routes/sessions.js'
 import { staffRouter } from './routes/staff.js'
@@ -27,6 +30,9 @@ app.use('/api', appointmentsRouter)
 app.use('/api', staffRouter)
 app.use('/api', dashboardRouter)
 app.use('/api', adminRouter)
+app.use('/api', couponsRouter)
+app.use('/api', crmRouter)
+app.use('/api', notificationsRouter)
 
 /** Demo-only convenience: rebuild the seed data from scratch on demand,
  * so a messed-up demo state (mid-presentation, mid-testing) is one call

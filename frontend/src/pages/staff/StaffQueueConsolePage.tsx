@@ -1,10 +1,11 @@
-import { PhoneCall, Plus, Search } from 'lucide-react'
+import { ArrowLeft, PhoneCall, Plus, Search } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { QueueRow } from '../../components/staff/QueueRow'
+import { hasPermission } from '../../components/staff/RequirePermission'
 import { TokenSlip } from '../../components/staff/TokenSlip'
 import {
   callNext,
@@ -27,6 +28,17 @@ const DOCTOR_STATUS_OPTIONS: { value: DoctorStatus; label: string }[] = [
 
 export function StaffQueueConsolePage() {
   const { sessionId } = useParams<{ sessionId: string }>()
+  // This console is reached from two different homes (a doctor's own
+  // /doctor/sessions/:id and a hospital staffer's /staff/sessions/:id).
+  // StaffLayout gives staff a persistent "Sessions" nav tab as their way
+  // back; DoctorLayout has no nav at all beyond the logo, so a doctor
+  // landed here with no visible way back to their dashboard. One
+  // location-aware back link fixes both, rather than passing a prop
+  // through two different parent routes.
+  const location = useLocation()
+  const isDoctorView = location.pathname.startsWith('/doctor')
+  const backTo = isDoctorView ? '/doctor' : '/staff'
+  const backLabel = isDoctorView ? 'Back to dashboard' : 'Back to sessions'
   const sessionFetcher = useCallback(() => fetchSession(sessionId!), [sessionId])
   const queueFetcher = useCallback(() => fetchQueue(sessionId!), [sessionId])
   const { data: sessionData, error: sessionError, refresh: refreshSession } = usePolling(sessionFetcher, 4_000, sessionId)
@@ -114,8 +126,25 @@ export function StaffQueueConsolePage() {
   const active = entries.filter((e) => ACTIVE.includes(e.status))
   const history = entries.filter((e) => !ACTIVE.includes(e.status)).sort((a, b) => a.tokenNumber - b.tokenNumber)
 
+  // Same "hide what you can't do" courtesy as StaffLayout's nav — a
+  // Sunrise payments-desk account (payments/refunds only) shouldn't see
+  // Call Next / doctor-status controls it would just get a 403 clicking,
+  // and a doctor viewing their own queue has 'queue' but never 'tokens'
+  // (they don't generate walk-ins or verify codes — that's reception's
+  // job). Backend enforces the real boundary either way.
+  const canRunQueue = hasPermission('queue')
+  const canManageTokens = hasPermission('tokens')
+
   return (
     <div className="flex flex-col gap-6">
+      <Link
+        to={backTo}
+        className="press-scale flex w-fit items-center gap-1.5 text-[13px] font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)] print:hidden"
+      >
+        <ArrowLeft size={15} aria-hidden="true" />
+        {backLabel}
+      </Link>
+
       {/* Header: who/where, doctor status controls */}
       <div className="flex flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -126,6 +155,7 @@ export function StaffQueueConsolePage() {
           </p>
         </div>
 
+        {canRunQueue && (
         <div className="flex flex-wrap items-center gap-2">
           {DOCTOR_STATUS_OPTIONS.map((opt) => (
             <button
@@ -158,12 +188,16 @@ export function StaffQueueConsolePage() {
             </label>
           )}
         </div>
+        )}
       </div>
 
-      {/* Current / Next / Call Next */}
+      {/* Current / Next / Call Next — the stats stay visible either way
+          (useful to glance at even without the queue module), only the
+          action button is gated. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <BigStat label="Current token" value={current?.tokenNumber ?? session.currentToken ?? '—'} />
         <BigStat label="Next patient" value={next?.tokenNumber ?? '—'} />
+        {canRunQueue && (
         <div className="flex items-center justify-center rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <Button
             size="lg"
@@ -175,6 +209,7 @@ export function StaffQueueConsolePage() {
             Call Next
           </Button>
         </div>
+        )}
       </div>
 
       {/* Two front-desk operational tools: generate a walk-in token
@@ -184,6 +219,7 @@ export function StaffQueueConsolePage() {
           are exactly the "token generation and verification" scope
           reception's role is meant to be, per the multi-tenant auth
           plan — no revenue/analytics access from this page. */}
+      {canManageTokens && (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <p className="text-sm font-bold text-[var(--color-text)]">Generate walk-in token</p>
@@ -236,6 +272,7 @@ export function StaffQueueConsolePage() {
           )}
         </div>
       </div>
+      )}
 
       {actionError && <ErrorState message={actionError} />}
 

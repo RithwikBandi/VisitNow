@@ -1,4 +1,4 @@
-import { ApiError, type Appointment, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type QueuePriority, type QueueSource, type RevenueReport, type Session, type SessionWithRelations } from './types'
+import { ApiError, type Appointment, type Clinic, type Doctor, type PaymentMethod, type QueueEntry, type QueuePriority, type QueueSource, type QueueStatus, type RevenueReport, type Session, type SessionWithRelations } from './types'
 import { getToken } from './auth'
 import type { PublicAccount } from './accountTypes'
 
@@ -69,7 +69,7 @@ export function fetchQueue(sessionId: string): Promise<{ entries: QueueEntry[] }
 
 export function generateToken(
   sessionId: string,
-  input: { source: QueueSource; patientName: string; patientPhone?: string; paymentMethod?: PaymentMethod },
+  input: { source: QueueSource; patientName: string; patientPhone?: string; paymentMethod?: PaymentMethod; couponCode?: string },
 ): Promise<{ entry: QueueEntry }> {
   return request(`/api/sessions/${sessionId}/token`, { method: 'POST', body: JSON.stringify(input) })
 }
@@ -116,6 +116,112 @@ export function cancelEntry(entryId: string): Promise<{ entry: QueueEntry }> {
   return request(`/api/queue-entries/${entryId}/cancel`, { method: 'POST' })
 }
 
+export function collectHospitalFee(entryId: string): Promise<{ entry: QueueEntry }> {
+  return request(`/api/queue-entries/${entryId}/collect-fee`, { method: 'POST' })
+}
+
+export function issueRefund(entryId: string, amount?: number, reason?: string): Promise<{ entry: QueueEntry }> {
+  return request(`/api/queue-entries/${entryId}/refund`, { method: 'POST', body: JSON.stringify({ amount, reason }) })
+}
+
+export interface RefundCandidateRow {
+  id: string
+  tokenNumber: number
+  patientName: string
+  clinicId: string
+  clinicName: string
+  doctorName: string
+  date: string
+  status: QueueStatus
+  maxRefundable: number
+  refundStatus?: 'REFUNDED'
+  refundAmount?: number
+  refundedAt?: string
+  refundedBy?: string
+  refundReason?: string
+}
+export function fetchRefundCandidates(): Promise<{ refunds: RefundCandidateRow[] }> {
+  return request('/api/staff/refunds')
+}
+
+// --- Coupons ---------------------------------------------------------
+
+export interface Coupon {
+  id: string
+  code: string
+  discountType: 'PERCENT' | 'FLAT'
+  discountValue: number
+  scope: 'PLATFORM' | 'CLINIC'
+  clinicId?: string
+  appliesTo: 'PLATFORM_FEE' | 'HOSPITAL_FEE' | 'BOTH'
+  active: boolean
+  maxUses?: number
+  usedCount: number
+  createdAt: string
+  createdBy: string
+}
+export interface CouponDiscount {
+  hospitalDiscount: number
+  platformDiscount: number
+  totalDiscount: number
+}
+
+export function validateCoupon(code: string, sessionId: string): Promise<{ coupon: Coupon; discount: CouponDiscount }> {
+  return request(`/api/coupons/validate?code=${encodeURIComponent(code)}&sessionId=${encodeURIComponent(sessionId)}`)
+}
+
+export function fetchCoupons(): Promise<{ coupons: Coupon[] }> {
+  return request('/api/admin/coupons')
+}
+
+export function createCoupon(input: {
+  code: string
+  discountType: 'PERCENT' | 'FLAT'
+  discountValue: number
+  scope: 'PLATFORM' | 'CLINIC'
+  clinicId?: string
+  appliesTo: 'PLATFORM_FEE' | 'HOSPITAL_FEE' | 'BOTH'
+  maxUses?: number
+}): Promise<{ coupon: Coupon }> {
+  return request('/api/admin/coupons', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function setCouponActive(id: string, active: boolean): Promise<{ coupon: Coupon }> {
+  return request(`/api/admin/coupons/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) })
+}
+
+// --- CRM ---------------------------------------------------------------
+
+export interface PatientDirectoryRow {
+  key: string
+  name: string
+  phone?: string
+  visitCount: number
+  firstVisitAt: string
+  lastVisitAt: string
+  lastStatus: QueueStatus
+  clinicNames: string[]
+  totalPaid: number
+}
+export function fetchPatientDirectory(): Promise<{ patients: PatientDirectoryRow[] }> {
+  return request('/api/crm/patients')
+}
+
+// --- Notifications -------------------------------------------------------
+
+export interface NotificationEvent {
+  id: string
+  scope: 'PLATFORM' | 'CLINIC'
+  clinicId?: string
+  type: 'clinic_onboarded' | 'staff_account_created' | 'doctor_account_created' | 'refund_issued' | 'coupon_created'
+  message: string
+  createdAt: string
+  actorAccountId?: string
+}
+export function fetchNotifications(): Promise<{ notifications: NotificationEvent[] }> {
+  return request('/api/notifications')
+}
+
 export function setPriority(entryId: string, priority: QueuePriority, assignedBy: string): Promise<{ entry: QueueEntry }> {
   return request(`/api/queue-entries/${entryId}/priority`, { method: 'POST', body: JSON.stringify({ priority, assignedBy }) })
 }
@@ -141,12 +247,42 @@ export function convertAppointment(appointmentId: string): Promise<{ appointment
 
 // --- Staff: revenue & analytics ------------------------------------------
 
-export function fetchRevenueReport(): Promise<RevenueReport> {
-  return request('/api/staff/revenue')
+export function fetchRevenueReport(city?: string): Promise<RevenueReport> {
+  return request(`/api/staff/revenue${city ? `?city=${encodeURIComponent(city)}` : ''}`)
 }
 
 // --- Auth-scoped dashboards & admin ---------------------------------------
 
+export interface DoctorDailyTrendRow {
+  date: string
+  tokensSeen: number
+  revenue: number
+}
+export interface DoctorClinicRow {
+  clinicId: string
+  clinicName: string
+  city: string
+  tokensIssued: number
+  revenue: number
+  due: number
+}
+export interface DoctorSourceRow {
+  source: QueueSource
+  count: number
+  revenue: number
+}
+export interface DoctorEntryRow {
+  id: string
+  tokenNumber: number
+  patientName: string
+  clinicName: string
+  date: string
+  source: QueueSource
+  status: QueueStatus
+  amount: number
+  collected: boolean
+  createdAt: string
+}
 export interface DoctorDashboard {
   doctor: Doctor
   todayTokensSeen: number
@@ -155,6 +291,10 @@ export interface DoctorDashboard {
   dailyAverageTokens: number
   clinics: Clinic[]
   sessions: Session[]
+  dailyTrend: DoctorDailyTrendRow[]
+  byClinic: DoctorClinicRow[]
+  bySource: DoctorSourceRow[]
+  entries: DoctorEntryRow[]
 }
 export function fetchDoctorDashboard(): Promise<DoctorDashboard> {
   return request('/api/dashboard/doctor')
@@ -171,7 +311,6 @@ export function fetchClinicDashboard(): Promise<ClinicDashboard> {
 
 export interface PlatformDashboard {
   clinics: Clinic[]
-  report: RevenueReport
 }
 export function fetchPlatformDashboard(): Promise<PlatformDashboard> {
   return request('/api/dashboard/platform')
@@ -194,7 +333,30 @@ export function onboardClinic(input: {
 
 export function createClinicStaff(
   clinicId: string,
-  input: { email: string; password: string; displayName: string },
+  input: { email: string; password: string; displayName: string; permissions?: string[] },
 ): Promise<{ account: PublicAccount }> {
   return request(`/api/admin/clinics/${clinicId}/staff`, { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function fetchClinicStaff(clinicId: string): Promise<{ staff: PublicAccount[] }> {
+  return request(`/api/admin/clinics/${clinicId}/staff`)
+}
+
+export function updateClinicStaffPermissions(clinicId: string, accountId: string, permissions: string[]): Promise<{ account: PublicAccount }> {
+  return request(`/api/admin/clinics/${clinicId}/staff/${accountId}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissions }) })
+}
+
+// --- Platform staff (super_admin-only, always — see the anti-escalation
+// rule in admin.ts) ---------------------------------------------------
+
+export function fetchSuperStaff(): Promise<{ staff: PublicAccount[] }> {
+  return request('/api/admin/super-staff')
+}
+
+export function createSuperStaff(input: { email: string; password: string; displayName: string; permissions?: string[] }): Promise<{ account: PublicAccount }> {
+  return request('/api/admin/super-staff', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function updateSuperStaffPermissions(accountId: string, permissions: string[]): Promise<{ account: PublicAccount }> {
+  return request(`/api/admin/super-staff/${accountId}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissions }) })
 }

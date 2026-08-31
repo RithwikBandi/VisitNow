@@ -1,11 +1,12 @@
-import { Check, CreditCard, Wallet } from 'lucide-react'
+import { Check, CreditCard, Ticket, Wallet, X } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { BackLink } from '../../components/patient/BackLink'
 import { PaymentGatewayModal } from '../../components/patient/PaymentGatewayModal'
 import { Button } from '../../components/ui/Button'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { fetchSession, generateToken } from '../../lib/api'
+import { fetchSession, generateToken, validateCoupon } from '../../lib/api'
+import type { CouponDiscount } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
 import { getPatientIdentity } from '../../lib/patientIdentity'
 import { addMyVisitId } from '../../lib/myVisits'
@@ -34,6 +35,16 @@ export function TokenPaymentPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [showGateway, setShowGateway] = useState(false)
 
+  // Coupons are an ONLINE-only concept (see queueEngine.generateToken's
+  // own comment on why) — switching to Pay at Hospital clears any
+  // applied discount rather than leaving a stale one the fee math below
+  // would otherwise silently keep showing.
+  const [couponInput, setCouponInput] = useState('')
+  const [discount, setDiscount] = useState<CouponDiscount | null>(null)
+  const [couponCode, setCouponCode] = useState<string | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [applyingCoupon, setApplyingCoupon] = useState(false)
+
   if (loading && !data) {
     return <div className="mt-6 h-80 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-border)]/40" />
   }
@@ -41,9 +52,34 @@ export function TokenPaymentPage() {
   if (!data) return null
 
   const { session, doctor, clinic } = data
-  const hospitalFee = session.hospitalFeeAmount
-  const payNow = method === 'ONLINE' ? hospitalFee + PLATFORM_FEE_INR : PLATFORM_FEE_INR
-  const payLater = method === 'ONLINE' ? 0 : hospitalFee
+  const hospitalFeeFull = session.hospitalFeeAmount
+  const hospitalFee = method === 'ONLINE' && discount ? Math.max(0, hospitalFeeFull - discount.hospitalDiscount) : hospitalFeeFull
+  const platformFee = method === 'ONLINE' && discount ? Math.max(0, PLATFORM_FEE_INR - discount.platformDiscount) : PLATFORM_FEE_INR
+  const payNow = method === 'ONLINE' ? hospitalFee + platformFee : PLATFORM_FEE_INR
+  const payLater = method === 'ONLINE' ? 0 : hospitalFeeFull
+
+  const applyCoupon = async () => {
+    if (!couponInput.trim()) return
+    setApplyingCoupon(true)
+    setCouponError(null)
+    try {
+      const { coupon, discount: d } = await validateCoupon(couponInput.trim(), session.id)
+      setDiscount(d)
+      setCouponCode(coupon.code)
+    } catch (err) {
+      setDiscount(null)
+      setCouponCode(null)
+      setCouponError(err instanceof ApiError ? err.message : 'Invalid coupon code.')
+    } finally {
+      setApplyingCoupon(false)
+    }
+  }
+  const removeCoupon = () => {
+    setDiscount(null)
+    setCouponCode(null)
+    setCouponInput('')
+    setCouponError(null)
+  }
 
   // Opens the demo gateway rather than creating the token directly — the
   // gateway's own "Pay ₹X" is the real point of commitment now, matching
@@ -66,6 +102,7 @@ export function TokenPaymentPage() {
         patientName: name.trim(),
         patientPhone: phone.trim() || undefined,
         paymentMethod: method,
+        couponCode: method === 'ONLINE' ? (couponCode ?? undefined) : undefined,
       })
       addMyVisitId(entry.id)
       navigate(`/queue/${entry.id}/confirmed`, { replace: true })
@@ -110,8 +147,23 @@ export function TokenPaymentPage() {
 
         <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 lg:hidden">
           <h2 className="mb-3 font-display text-base font-bold text-[var(--color-text)]">Fee breakdown</h2>
-          <Row label="Clinic token fee" value={`₹${hospitalFee}`} />
-          <Row label="VisitNow platform fee" value={`₹${PLATFORM_FEE_INR}`} />
+          <Row label="Clinic token fee" value={`₹${hospitalFeeFull}`} strike={!!discount && method === 'ONLINE'} />
+          {!!discount && method === 'ONLINE' && <Row label="Clinic token fee (after coupon)" value={`₹${hospitalFee}`} />}
+          <Row label="VisitNow platform fee" value={`₹${PLATFORM_FEE_INR}`} strike={!!discount && method === 'ONLINE'} />
+          {!!discount && method === 'ONLINE' && <Row label="Platform fee (after coupon)" value={`₹${platformFee}`} />}
+        </div>
+
+        <div className="lg:hidden">
+          <CouponField
+            method={method}
+            couponInput={couponInput}
+            setCouponInput={setCouponInput}
+            couponCode={couponCode}
+            couponError={couponError}
+            applyingCoupon={applyingCoupon}
+            applyCoupon={applyCoupon}
+            removeCoupon={removeCoupon}
+          />
         </div>
 
         <div className="flex flex-col gap-3">
@@ -120,7 +172,7 @@ export function TokenPaymentPage() {
           <PaymentOption
             icon={CreditCard}
             title="Pay token fee online"
-            detail={`Pay ₹${hospitalFee + PLATFORM_FEE_INR} now, in one payment`}
+            detail={`Pay ₹${hospitalFee + platformFee} now, in one payment`}
             selected={method === 'ONLINE'}
             onSelect={() => setMethod('ONLINE')}
           />
@@ -171,9 +223,22 @@ export function TokenPaymentPage() {
 
           <div>
             <h2 className="mb-3 font-display text-sm font-bold text-[var(--color-text)]">Fee breakdown</h2>
-            <Row label="Clinic token fee" value={`₹${hospitalFee}`} />
-            <Row label="VisitNow platform fee" value={`₹${PLATFORM_FEE_INR}`} />
+            <Row label="Clinic token fee" value={`₹${hospitalFeeFull}`} strike={!!discount && method === 'ONLINE'} />
+            {!!discount && method === 'ONLINE' && <Row label="Clinic token fee (after coupon)" value={`₹${hospitalFee}`} />}
+            <Row label="VisitNow platform fee" value={`₹${PLATFORM_FEE_INR}`} strike={!!discount && method === 'ONLINE'} />
+            {!!discount && method === 'ONLINE' && <Row label="Platform fee (after coupon)" value={`₹${platformFee}`} />}
           </div>
+
+          <CouponField
+            method={method}
+            couponInput={couponInput}
+            setCouponInput={setCouponInput}
+            couponCode={couponCode}
+            couponError={couponError}
+            applyingCoupon={applyingCoupon}
+            applyCoupon={applyCoupon}
+            removeCoupon={removeCoupon}
+          />
 
           <div className="flex flex-col gap-2 border-t border-[var(--color-border)] pt-4">
             <div className="flex items-center justify-between text-sm">
@@ -198,11 +263,71 @@ export function TokenPaymentPage() {
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, strike = false }: { label: string; value: string; strike?: boolean }) {
   return (
     <div className="flex items-center justify-between py-1.5 text-sm">
       <span className="text-[var(--color-text-muted)]">{label}</span>
-      <span className="font-semibold text-[var(--color-text)]">{value}</span>
+      <span className={`font-semibold ${strike ? 'text-[var(--color-text-faint)] line-through' : 'text-[var(--color-text)]'}`}>{value}</span>
+    </div>
+  )
+}
+
+/** Redeeming a coupon is online-only (see queueEngine.generateToken's
+ * own comment) — the field is still shown when "Pay at hospital" is
+ * selected, just inert, so switching payment methods doesn't make it
+ * mysteriously vanish; the fee rows above simply stop showing a
+ * discount while it's selected. */
+function CouponField({
+  method,
+  couponInput,
+  setCouponInput,
+  couponCode,
+  couponError,
+  applyingCoupon,
+  applyCoupon,
+  removeCoupon,
+}: {
+  method: PaymentMethod
+  couponInput: string
+  setCouponInput: (v: string) => void
+  couponCode: string | null
+  couponError: string | null
+  applyingCoupon: boolean
+  applyCoupon: () => void
+  removeCoupon: () => void
+}) {
+  if (couponCode) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-[var(--radius-lg)] border border-[var(--color-accent-200)] bg-[var(--color-accent-50)] px-4 py-3">
+        <span className="flex items-center gap-1.5 text-[13px] font-bold text-[var(--color-accent-700)]">
+          <Ticket size={14} aria-hidden="true" />
+          {couponCode} applied{method !== 'ONLINE' ? ' (online payment only)' : ''}
+        </span>
+        <button onClick={removeCoupon} aria-label="Remove coupon" className="press-scale text-[var(--color-accent-700)]">
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-2">
+        <input
+          value={couponInput}
+          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+          onKeyDown={(e) => e.key === 'Enter' && applyCoupon()}
+          placeholder="Coupon code"
+          className="w-full min-w-0 rounded-[var(--radius-btn)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-4 py-2.5 text-[14px] uppercase focus:border-[var(--color-brand-400)] focus:outline-none"
+        />
+        <button
+          onClick={applyCoupon}
+          disabled={applyingCoupon || !couponInput.trim()}
+          className="press-scale shrink-0 rounded-[var(--radius-btn)] border border-[var(--color-border-strong)] px-4 py-2.5 text-[13px] font-bold text-[var(--color-text)] disabled:opacity-50"
+        >
+          {applyingCoupon ? 'Checking…' : 'Apply'}
+        </button>
+      </div>
+      {couponError && <p className="text-[13px] text-[var(--color-danger)]">{couponError}</p>}
     </div>
   )
 }

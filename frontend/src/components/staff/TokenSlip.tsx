@@ -42,7 +42,7 @@ export function TokenSlip({
           <p className="tabular-nums font-display text-[72px] font-black leading-none text-[var(--color-brand-700)]">{entry.tokenNumber}</p>
           <p className="mt-3 text-sm font-semibold text-[var(--color-text)]">{entry.patientName}</p>
           <p className="mt-1 text-[12px] text-[var(--color-text-faint)]">
-            Walk-in — no verification code. Wait for your token number to be called.
+            Walk-in token, no verification code needed. Wait for your number to be called.
           </p>
         </div>
 

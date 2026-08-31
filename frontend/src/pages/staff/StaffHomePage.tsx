@@ -9,7 +9,7 @@ export function StaffHomePage() {
   const account = getCachedAccount()
   // clinicId scoping is a courtesy here too (the write actions are the
   // real enforcement boundary, server-side — see requireOwnedSession in
-  // backend/src/routes/sessions.ts): a clinic_admin/clinic_staff session
+  // backend/src/routes/sessions.ts): a hospital_admin/hospital_staff session
   // picker shouldn't even list another clinic's sessions to begin with.
   // super_admin has no clinicId, so the fetch stays unfiltered for them.
   const fetcher = useCallback(() => fetchTodaysSessions(account?.clinicId), [account?.clinicId])

@@ -171,6 +171,35 @@ export interface QueueEntry {
   platformFeeAmount?: number
   platformFeeStatus?: FeeStatus
   hospitalFeeStatus?: FeeStatus
+  /** Set only when a PAY_AT_HOSPITAL entry's clinic fee is actually
+   * collected in person — see queueEngine.collectHospitalFee. Was a
+   * real, confirmed gap before this: hospitalFeeStatus was set once at
+   * token creation ('DUE' for PAY_AT_HOSPITAL) and never updated again
+   * anywhere, so there was no way for reception to ever mark that cash
+   * as received. These two fields exist for the same reason
+   * priorityAssignedBy does — a record of who actually did the thing,
+   * not just that it happened. */
+  hospitalFeeCollectedAt?: string
+  hospitalFeeCollectedBy?: string
+
+  /** Refund fields — see queueEngine.issueRefund. Deliberately never
+   * flip hospitalFeeStatus/platformFeeStatus back to 'DUE': those stay
+   * PAID (historically true — the money really was collected once),
+   * refundStatus layers on top, the same "separate, never-collapsed
+   * statuses" rule the payment model already documents in decisions
+   * log §3-4. Resolves edge case #31 ("no refund model"). */
+  refundStatus?: 'REFUNDED'
+  refundAmount?: number
+  refundedAt?: string
+  refundedBy?: string
+  refundReason?: string
+
+  /** Set only for source: 'online' entries that redeemed a coupon —
+   * see queueEngine.generateToken's couponCode param and
+   * store/coupon.ts. discountAmount is the total INR actually knocked
+   * off this entry's fees, always computed and applied server-side. */
+  couponCode?: string
+  discountAmount?: number
 
   /** 4-digit, visit-specific — see decisions log §6. A lookup key for a
    * human at reception, not an authentication credential. Only issued

@@ -23,10 +23,14 @@ import type { QueueEntry, QueueSource, Session } from '../types/index.js'
  * is exactly what that entry would have been charged. */
 export function feeFor(entry: QueueEntry, session: Session | undefined): { amount: number; collected: boolean } {
   const amount = entry.hospitalFeeAmount ?? session?.hospitalFeeAmount ?? 0
-  // A cancelled entry's fee is still counted as collected if its status
-  // says PAID — this prototype has no refund model (edge case #31), so
-  // an already-paid fee staying "collected" after a later cancellation
-  // is the accurate reflection of that decision, not an oversight.
+  // A cancelled entry's fee is still counted as collected here even
+  // after a later refund — refundStatus/refundAmount are a separate
+  // layer (see queueEngine.issueRefund, resolving what edge case #31
+  // used to flag as unmodeled), not a change to whether the fee was
+  // *collected* in the first place. A revenue report showing "collected"
+  // and a refunds report showing "later given back" are both true and
+  // both worth seeing, which is why they're two different views over
+  // the same rows rather than one collapsing into the other.
   const collected = entry.hospitalFeeStatus ? entry.hospitalFeeStatus === 'PAID' : true
   return { amount, collected }
 }
@@ -200,7 +204,7 @@ export function computeRevenueReport(): RevenueReport {
 }
 
 /**
- * Same report, filtered to one clinic — for a clinic_admin account, who
+ * Same report, filtered to one clinic — for a hospital_admin account, who
  * should never see another tenant's revenue. Deliberately a filter on
  * the already-computed report rather than a second aggregation path:
  * `byClinic`/`entries` already carry `clinicId`/`clinicName`, so scoping
@@ -249,4 +253,105 @@ export function scopeReportToClinic(report: RevenueReport, clinicId: string): Re
     bySource: [...bySource.values()],
     entries,
   }
+}
+
+/**
+ * Same report, filtered to one city — the platform-level counterpart to
+ * scopeReportToClinic, for a super_admin/super_admin_staff account that
+ * wants "just Hyderabad" rather than every clinic at once (the user's
+ * own "select a location and see data for that location" requirement).
+ * Same "filter the already-computed report" shape as scopeReportToClinic
+ * — city isn't a field byDay/bySource carry directly, so this filters
+ * by clinicId membership (from byClinic, which does carry city) rather
+ * than re-deriving city per entry. */
+export function scopeReportToCity(report: RevenueReport, city: string): RevenueReport {
+  const byClinic = report.byClinic.filter((r) => r.city === city)
+  const clinicNames = new Set(byClinic.map((r) => r.clinicName))
+  const byDoctor = report.byDoctor.filter((r) => r.clinicNames.some((n) => clinicNames.has(n)))
+  const entries = report.entries.filter((r) => clinicNames.has(r.clinicName))
+
+  const totals = emptyTotals()
+  const byDay = new Map<string, RevenueDayRow>()
+  const bySource = new Map<QueueSource, RevenueSourceRow>()
+  for (const e of entries) {
+    totals.tokensIssued += 1
+    if (e.clinicFeeCollected) totals.clinicFeeCollected += e.clinicFeeAmount
+    else totals.clinicFeeDue += e.clinicFeeAmount
+    totals.platformFeeCollected += e.platformFeeCollected
+
+    const dayRow = byDay.get(e.date) ?? { date: e.date, ...emptyTotals() }
+    dayRow.tokensIssued += 1
+    if (e.clinicFeeCollected) dayRow.clinicFeeCollected += e.clinicFeeAmount
+    else dayRow.clinicFeeDue += e.clinicFeeAmount
+    dayRow.platformFeeCollected += e.platformFeeCollected
+    byDay.set(e.date, dayRow)
+
+    const sourceRow = bySource.get(e.source) ?? { source: e.source, count: 0, clinicFeeCollected: 0 }
+    sourceRow.count += 1
+    if (e.clinicFeeCollected) sourceRow.clinicFeeCollected += e.clinicFeeAmount
+    bySource.set(e.source, sourceRow)
+  }
+
+  return {
+    generatedAt: report.generatedAt,
+    totals,
+    byClinic,
+    byDoctor,
+    byDay: [...byDay.values()].sort((a, b) => b.date.localeCompare(a.date)),
+    bySource: [...bySource.values()],
+    entries,
+  }
+}
+
+export interface RefundCandidateRow {
+  id: string
+  tokenNumber: number
+  patientName: string
+  clinicId: string
+  clinicName: string
+  doctorName: string
+  date: string
+  status: QueueEntry['status']
+  maxRefundable: number
+  refundStatus?: 'REFUNDED'
+  refundAmount?: number
+  refundedAt?: string
+  refundedBy?: string
+  refundReason?: string
+}
+
+/**
+ * Every cancelled/no-show entry that actually had money collected on
+ * it — whether still refund-eligible or already refunded — reusing the
+ * same `buildRows()` scan every other report in this file uses, not a
+ * second aggregation path. Optionally scoped to one clinic, the same
+ * `scopeReportToClinic` pattern: a hospital_staff account with the
+ * 'refunds' module should only ever see their own clinic's candidates.
+ */
+export function listRefundCandidates(clinicId?: string): RefundCandidateRow[] {
+  return buildRows()
+    .filter((row) => ['cancelled', 'no_show'].includes(row.entry.status))
+    .filter((row) => !clinicId || row.clinicId === clinicId)
+    .map((row) => {
+      const paidHospital = row.entry.hospitalFeeStatus === 'PAID' ? row.entry.hospitalFeeAmount ?? 0 : 0
+      const paidPlatform = row.entry.platformFeeStatus === 'PAID' ? row.entry.platformFeeAmount ?? 0 : 0
+      return {
+        id: row.entry.id,
+        tokenNumber: row.entry.tokenNumber,
+        patientName: row.entry.patientName,
+        clinicId: row.clinicId,
+        clinicName: row.clinicName,
+        doctorName: row.doctorName,
+        date: row.date,
+        status: row.entry.status,
+        maxRefundable: paidHospital + paidPlatform,
+        refundStatus: row.entry.refundStatus,
+        refundAmount: row.entry.refundAmount,
+        refundedAt: row.entry.refundedAt,
+        refundedBy: row.entry.refundedBy,
+        refundReason: row.entry.refundReason,
+      }
+    })
+    .filter((row) => row.maxRefundable > 0 || row.refundStatus === 'REFUNDED')
+    .sort((a, b) => b.date.localeCompare(a.date))
 }

@@ -15,8 +15,16 @@ import { PLATFORM_FEE_INR, type Clinic, type Doctor, type PaymentMethod, type Qu
 import type { Account, AccountRole } from '../types/account.js'
 import { accounts, clinics, doctors, nextId, queueEntries, sessions } from './store.js'
 
-const NOW = new Date()
-const today = NOW.toISOString().slice(0, 10)
+// Mutable, not const — recomputed at the top of seedDemoData() itself,
+// not frozen at module-load time. A demo server can run for hours (or
+// get shown again days later without a restart); if "today" were fixed
+// to whenever the process first started, every session seeded as
+// "today" would silently vanish from every today-filtered view the
+// moment the real calendar date rolled over — exactly the failure mode
+// that motivated relTime()'s own "correct at any hour" design below, now
+// extended to "correct on any day" too.
+let NOW = new Date()
+let today = NOW.toISOString().slice(0, 10)
 
 /** `offset` in days from today — used to seed a couple of upcoming dates
  * for a session so the date-selector on SessionDetailPage has more than
@@ -97,6 +105,7 @@ function addAccount(a: {
   displayName: string
   clinicId?: string
   doctorId?: string
+  permissions?: string[]
 }): Account {
   const account: Account = { id: nextId('account'), createdAt: new Date().toISOString(), ...a }
   accounts.set(account.id, account)
@@ -120,6 +129,12 @@ function onlinePayment(method: PaymentMethod, hospitalFeeAmount: number, code: s
 }
 
 export function seedDemoData(): void {
+  // Re-anchor "now"/"today" to the real current moment every time this
+  // runs (process start, and every /api/demo/reset) — see the doc
+  // comment on the module-level declarations above.
+  NOW = new Date()
+  today = NOW.toISOString().slice(0, 10)
+
   const sunrise = addClinic({
     name: 'Sunrise Multispecialty Clinic',
     location: 'Banjara Hills Road No. 12',
@@ -225,7 +240,7 @@ export function seedDemoData(): void {
     priority: 'priority',
     status: 'waiting',
     patientName: 'Lakshmi Narayan',
-    priorityAssignedBy: 'Front Desk — Sunrise',
+    priorityAssignedBy: 'Front Desk, Sunrise',
   })
   addEntry({
     sessionId: kumarMorning.id,
@@ -287,19 +302,38 @@ export function seedDemoData(): void {
     isQueueOpen: false,
   })
 
-  // Dr. Kumar's evening session — a different clinic, a different day
-  // part, the same doctor: the "sessions, not doctors, own queues" point.
-  addSession({
+  // Dr. Kumar's second clinic, earlier today — a different clinic, a
+  // different day part, the same doctor: the "sessions, not doctors,
+  // own queues" point, and the reason a doctor's own dashboard needs a
+  // real "revenue by clinic" breakdown rather than one merged number.
+  // Already closed (ran and finished before "now"), not upcoming, so a
+  // completed token history here is honest rather than contradicting an
+  // unopened queue.
+  const kumarCityCareEarlier = addSession({
     doctorId: drKumar.id,
     clinicId: cityCare.id,
-    label: 'Evening Session',
-    startTime: relTime(5),
-    endTime: relTime(9),
+    label: 'Early Morning Session',
+    startTime: relTime(-6),
+    endTime: relTime(-2),
     avgConsultMinutes: 6,
     hospitalFeeAmount: 550,
-    doctorStatus: 'available',
+    doctorStatus: 'closed',
     isQueueOpen: false,
+    nextTokenNumber: 6,
+    currentToken: 5,
   })
+  for (let t = 1; t <= 5; t++) {
+    addEntry({
+      sessionId: kumarCityCareEarlier.id,
+      tokenNumber: t,
+      source: t % 3 === 0 ? 'offline' : 'online',
+      priority: 'regular',
+      status: 'completed',
+      patientName: DEMO_NAMES[(t + 3) % DEMO_NAMES.length],
+      completedAt: new Date(Date.now() - (6 - t) * 45 * 60_000).toISOString(),
+      ...(t % 3 === 0 ? {} : onlinePayment('ONLINE', 550, `61${t}2`)),
+    })
+  }
 
   // --- A delayed session, to show doctor-status in a non-default state ---
   const raoAfternoon = addSession({
@@ -745,7 +779,7 @@ export function seedDemoData(): void {
     priority: 'priority',
     status: 'waiting',
     patientName: 'Ganesh Patil',
-    priorityAssignedBy: 'Front Desk — Ramnagar',
+    priorityAssignedBy: 'Front Desk, Ramnagar',
   })
   addSession({
     doctorId: drSrinivas.id,
@@ -779,6 +813,104 @@ export function seedDemoData(): void {
     endTime: '12:00',
     avgConsultMinutes: 10,
     hospitalFeeAmount: 350,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+
+  // --- More Warangal doctors — three more clinicians so the city's
+  // three clinics read as a genuinely active local market, not one or
+  // two doctors' showcase. Same fictional-identity-on-real-geography
+  // convention as the rest of this file's own header comment. Subedari
+  // specifically had no live session at all until drLakshmi below — a
+  // real gap once "which clinics are live right now" became something
+  // patients actually compare city to city.
+  const drLakshmi = addDoctor({
+    name: 'Dr. Lakshmi Chintala',
+    specialty: 'Cardiologist',
+    qualifications: 'MBBS, DM (Cardiology)',
+    photoUrl: doctorPhoto('dr-lakshmi-chintala'),
+  })
+  const drRaviTeja = addDoctor({
+    name: 'Dr. Ravi Teja Bandari',
+    specialty: 'Dentist',
+    qualifications: 'BDS, MDS (Prosthodontics)',
+    photoUrl: doctorPhoto('dr-ravi-teja-bandari'),
+  })
+  const drSwetha = addDoctor({
+    name: 'Dr. Swetha Konda',
+    specialty: 'General Physician',
+    qualifications: 'MBBS, MD (General Medicine)',
+    photoUrl: doctorPhoto('dr-swetha-konda'),
+  })
+
+  // A third live Warangal session, at Subedari specifically — so all
+  // three Warangal clinics have something happening right now, the same
+  // way Hyderabad's do.
+  const lakshmiLive = addSession({
+    doctorId: drLakshmi.id,
+    clinicId: subedariClinic.id,
+    label: 'Morning Session',
+    startTime: relTime(-1),
+    endTime: relTime(3),
+    avgConsultMinutes: 11,
+    hospitalFeeAmount: 600,
+    doctorStatus: 'available',
+    isQueueOpen: true,
+    nextTokenNumber: 6,
+    currentToken: 3,
+  })
+  for (let t = 1; t <= 2; t++) {
+    addEntry({
+      sessionId: lakshmiLive.id,
+      tokenNumber: t,
+      source: t === 1 ? 'online' : 'offline',
+      priority: 'regular',
+      status: 'completed',
+      patientName: DEMO_NAMES[(t + 14) % DEMO_NAMES.length],
+      completedAt: new Date(Date.now() - (3 - t) * 15 * 60_000).toISOString(),
+    })
+  }
+  addEntry({
+    sessionId: lakshmiLive.id,
+    tokenNumber: 3,
+    source: 'online',
+    priority: 'regular',
+    status: 'in_progress',
+    patientName: 'Kiran Bathula',
+    calledAt: new Date(Date.now() - 6 * 60_000).toISOString(),
+    startedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+    ...onlinePayment('ONLINE', 600, '4471'),
+  })
+  addEntry({ sessionId: lakshmiLive.id, tokenNumber: 4, source: 'offline', priority: 'regular', status: 'waiting', patientName: 'Manoj Pillai' })
+  addEntry({
+    sessionId: lakshmiLive.id,
+    tokenNumber: 5,
+    source: 'online',
+    priority: 'regular',
+    status: 'waiting',
+    patientName: 'Aditi Varma',
+    ...onlinePayment('PAY_AT_HOSPITAL', 600, '5023'),
+  })
+
+  addSession({
+    doctorId: drRaviTeja.id,
+    clinicId: kakatiyaClinic.id,
+    label: 'Evening Session',
+    startTime: '16:00',
+    endTime: '19:00',
+    avgConsultMinutes: 20,
+    hospitalFeeAmount: 400,
+    doctorStatus: 'available',
+    isQueueOpen: false,
+  })
+  addSession({
+    doctorId: drSwetha.id,
+    clinicId: ramnagarClinic.id,
+    label: 'Evening Session',
+    startTime: '18:00',
+    endTime: '21:00',
+    avgConsultMinutes: 8,
+    hospitalFeeAmount: 300,
     doctorStatus: 'available',
     isQueueOpen: false,
   })
@@ -837,25 +969,73 @@ export function seedDemoData(): void {
   // every demo login lives; there's no "forgot password"/email flow in
   // this phase, so a login not listed here doesn't exist.
   //
-  // | Account                 | Role         | Scope                          | Email                              | Password         |
-  // |--------------------------|--------------|---------------------------------|-------------------------------------|------------------|
-  // | VisitNow Ops             | super_admin  | every clinic, platform revenue  | admin@visitnow.app                  | visitnow2026     |
-  // | Sunrise/City Care admin  | clinic_admin | Sunrise Multispecialty Clinic   | admin@sunriseclinic.demo            | sunrise2026      |
-  // | Metro Diagnostics admin  | clinic_admin | Metro Diagnostics & Clinic      | admin@metrodiagnostics.demo         | metro2026        |
-  // | Kakatiya General admin   | clinic_admin | Kakatiya General Clinic         | admin@kakatiyaclinic.demo           | kakatiya2026     |
-  // | Sunrise front desk       | clinic_staff | Sunrise Multispecialty Clinic   | frontdesk@sunriseclinic.demo        | frontdesk2026    |
-  // | Dr. Ashwin Kumar         | doctor       | Sunrise + City Care Hospital    | ashwin.kumar@visitnow.demo          | doctor2026       |
-  // | Dr. Kavya Reddy          | doctor       | Metro Diagnostics + Lakeview    | kavya.reddy@visitnow.demo           | doctor2026       |
+  // | Account                    | Role               | Scope / permissions                        | Email                              | Password         |
+  // |-----------------------------|--------------------|---------------------------------------------|-------------------------------------|------------------|
+  // | VisitNow Ops                | super_admin        | every clinic, platform revenue, everything  | admin@visitnow.app                  | visitnow2026     |
+  // | VisitNow Ops — Hospitals    | super_admin_staff  | hospitals, doctors only                     | staff.hospitals@visitnow.app        | staff2026        |
+  // | VisitNow Ops — Payments     | super_admin_staff  | payments, settlements, refunds, coupons only| staff.payments@visitnow.app         | staff2026        |
+  // | Sunrise/City Care admin     | hospital_admin     | Sunrise Multispecialty Clinic, everything   | admin@sunriseclinic.demo            | sunrise2026      |
+  // | Metro Diagnostics admin     | hospital_admin     | Metro Diagnostics & Clinic, everything      | admin@metrodiagnostics.demo         | metro2026        |
+  // | Kakatiya General admin      | hospital_admin     | Kakatiya General Clinic, everything         | admin@kakatiyaclinic.demo           | kakatiya2026     |
+  // | Sunrise front desk          | hospital_staff     | Sunrise — queue, tokens, appointments only  | frontdesk@sunriseclinic.demo        | frontdesk2026    |
+  // | Sunrise payments desk       | hospital_staff     | Sunrise — payments, refunds only, no queue  | payments@sunriseclinic.demo         | payments2026     |
+  // | Dr. Ashwin Kumar            | doctor             | Sunrise + City Care Hospital                | ashwin.kumar@visitnow.demo          | doctor2026       |
+  // | Dr. Kavya Reddy             | doctor             | Metro Diagnostics + Lakeview                | kavya.reddy@visitnow.demo           | doctor2026       |
   //
-  // Kumar and Reddy are deliberately the two doctors already seeded
-  // working two clinics each, above — the doctor dashboard's "your
-  // clinics" list has genuine multi-clinic data to demo, not a
-  // placeholder built to only ever show one.
+  // The two hospital_staff accounts and two super_admin_staff accounts
+  // are deliberately given *different, non-overlapping* permission
+  // subsets — the whole point of this round over the previous "any
+  // staff account can do everything" shape — matching the product
+  // spec's own examples ("Reception Staff → offline patients +
+  // appointments + queue", "Payment Staff → cash verification +
+  // payments"). Kumar and Reddy are deliberately the two doctors already
+  // seeded working two clinics each, above — the doctor dashboard's
+  // "your clinics" list has genuine multi-clinic data to demo.
   addAccount({ role: 'super_admin', email: 'admin@visitnow.app', password: 'visitnow2026', displayName: 'VisitNow Ops' })
-  addAccount({ role: 'clinic_admin', email: 'admin@sunriseclinic.demo', password: 'sunrise2026', displayName: 'Sunrise Admin', clinicId: sunrise.id })
-  addAccount({ role: 'clinic_admin', email: 'admin@metrodiagnostics.demo', password: 'metro2026', displayName: 'Metro Diagnostics Admin', clinicId: metroDiagnostics.id })
-  addAccount({ role: 'clinic_admin', email: 'admin@kakatiyaclinic.demo', password: 'kakatiya2026', displayName: 'Kakatiya Admin', clinicId: kakatiyaClinic.id })
-  addAccount({ role: 'clinic_staff', email: 'frontdesk@sunriseclinic.demo', password: 'frontdesk2026', displayName: 'Sunrise Front Desk', clinicId: sunrise.id })
+  addAccount({
+    role: 'super_admin_staff',
+    email: 'staff.hospitals@visitnow.app',
+    password: 'staff2026',
+    displayName: 'VisitNow Ops: Hospitals',
+    permissions: ['hospitals', 'doctors'],
+  })
+  addAccount({
+    role: 'super_admin_staff',
+    email: 'staff.payments@visitnow.app',
+    password: 'staff2026',
+    displayName: 'VisitNow Ops: Payments',
+    permissions: ['payments', 'settlements', 'refunds', 'coupons'],
+  })
+  // The product spec's own third example ("Staff C → Users + CRM") — a
+  // seeded account so the CRM directory and platform notifications feed
+  // have a real, permission-scoped login to demo/test against, same as
+  // the hospitals/payments staff above.
+  addAccount({
+    role: 'super_admin_staff',
+    email: 'staff.users@visitnow.app',
+    password: 'staff2026',
+    displayName: 'VisitNow Ops: Users & CRM',
+    permissions: ['users', 'crm', 'notifications', 'reports'],
+  })
+  addAccount({ role: 'hospital_admin', email: 'admin@sunriseclinic.demo', password: 'sunrise2026', displayName: 'Sunrise Admin', clinicId: sunrise.id })
+  addAccount({ role: 'hospital_admin', email: 'admin@metrodiagnostics.demo', password: 'metro2026', displayName: 'Metro Diagnostics Admin', clinicId: metroDiagnostics.id })
+  addAccount({ role: 'hospital_admin', email: 'admin@kakatiyaclinic.demo', password: 'kakatiya2026', displayName: 'Kakatiya Admin', clinicId: kakatiyaClinic.id })
+  addAccount({
+    role: 'hospital_staff',
+    email: 'frontdesk@sunriseclinic.demo',
+    password: 'frontdesk2026',
+    displayName: 'Sunrise Front Desk',
+    clinicId: sunrise.id,
+    permissions: ['queue', 'tokens', 'appointments', 'notifications'],
+  })
+  addAccount({
+    role: 'hospital_staff',
+    email: 'payments@sunriseclinic.demo',
+    password: 'payments2026',
+    displayName: 'Sunrise Payments Desk',
+    clinicId: sunrise.id,
+    permissions: ['payments', 'refunds'],
+  })
 
   const kumarAccount = addAccount({ role: 'doctor', email: 'ashwin.kumar@visitnow.demo', password: 'doctor2026', displayName: drKumar.name, doctorId: drKumar.id })
   drKumar.accountId = kumarAccount.id
