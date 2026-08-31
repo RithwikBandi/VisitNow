@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { PriorityBadge, SourceBadge, StatusBadge } from '../../components/ui/Badge'
 import { fetchQueueEntry } from '../../lib/api'
-import { getMyVisitIds } from '../../lib/myVisits'
+import { getMyVisitIds, isMyEntry, removeMyVisitId } from '../../lib/myVisits'
+import { getPatientIdentity } from '../../lib/patientIdentity'
 import { futureDateLabel } from '../../lib/sessions'
 import type { Clinic, Doctor, QueueEntry, Session } from '../../lib/types'
 
@@ -53,10 +54,19 @@ export function VisitsPage() {
     let cancelled = false
     ;(async () => {
       const ids = getMyVisitIds()
+      const identity = getPatientIdentity()
       const results = await Promise.all(
         ids.map(async (id) => {
           try {
             const { entry, session, doctor, clinic } = await fetchQueueEntry(id)
+            // Same reset-reuses-the-same-id gap as HomePage's active-visit
+            // banner (see isMyEntry's own doc comment) — a stale id here
+            // now belongs to someone else's fresh seeded entry, never
+            // this browser's; drop and prune it rather than list it.
+            if (!isMyEntry(entry, identity)) {
+              removeMyVisitId(id)
+              return null
+            }
             return { entry, session, doctor, clinic }
           } catch {
             return null

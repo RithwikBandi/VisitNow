@@ -8,7 +8,7 @@ import { SplitFlapNumber } from '../../components/ui/SplitFlapNumber'
 import { fetchClinics, fetchQueueEntry, fetchTodaysSessions } from '../../lib/api'
 import { usePolling } from '../../hooks/usePolling'
 import { getPatientIdentity } from '../../lib/patientIdentity'
-import { getMyVisitIds } from '../../lib/myVisits'
+import { getMyVisitIds, isMyEntry, removeMyVisitId } from '../../lib/myVisits'
 import { useSelectedCity } from './LocationPicker'
 import type { QueueEntry, SessionWithRelations } from '../../lib/types'
 
@@ -28,10 +28,19 @@ function useActiveVisitBanner() {
   useEffect(() => {
     let cancelled = false
     const ids = getMyVisitIds().slice(0, 5)
+    const identity = getPatientIdentity()
     ;(async () => {
       for (const id of ids) {
         try {
           const { entry } = await fetchQueueEntry(id)
+          // A demo reset reassigns this same id to a fresh, unrelated
+          // seeded entry (see isMyEntry's own doc comment for why) —
+          // never surface someone else's token as "yours," and prune
+          // the id so it isn't re-checked on every future visit.
+          if (!isMyEntry(entry, identity)) {
+            removeMyVisitId(id)
+            continue
+          }
           if (ACTIVE_STATUSES.includes(entry.status)) {
             if (!cancelled) setEntry(entry)
             return
