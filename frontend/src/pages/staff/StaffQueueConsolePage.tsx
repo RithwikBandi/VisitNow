@@ -136,10 +136,18 @@ export function StaffQueueConsolePage() {
   const canManageTokens = hasPermission('tokens')
 
   return (
-    <div className="flex flex-col gap-6">
+    // print:hidden on the whole console, not just individual controls —
+    // window.print() here is only ever triggered from inside TokenSlip's
+    // own "Print slip" button (see below), so the entire live queue
+    // console printing itself was never correct: it put every other
+    // waiting patient's name and status on a slip meant for one patient.
+    // TokenSlip renders as a sibling *outside* this wrapper specifically
+    // so hiding this whole tree for print doesn't hide it too.
+    <>
+    <div className="flex flex-col gap-6 print:hidden">
       <Link
         to={backTo}
-        className="press-scale flex w-fit items-center gap-1.5 text-[13px] font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)] print:hidden"
+        className="press-scale flex w-fit items-center gap-1.5 text-[13px] font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
       >
         <ArrowLeft size={15} aria-hidden="true" />
         {backLabel}
@@ -311,8 +319,9 @@ export function StaffQueueConsolePage() {
         </div>
       )}
 
-      {newSlip && <TokenSlip entry={newSlip} doctor={doctor} clinic={clinic} onClose={() => setNewSlip(null)} />}
     </div>
+    {newSlip && <TokenSlip entry={newSlip} doctor={doctor} clinic={clinic} session={session} onClose={() => setNewSlip(null)} />}
+    </>
   )
 }
 

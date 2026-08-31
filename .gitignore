@@ -5,3 +5,6 @@ dist/
 .env.local
 .DS_Store
 *.log
+
+# Investor materials — kept locally, not published in the repo.
+pitch/
